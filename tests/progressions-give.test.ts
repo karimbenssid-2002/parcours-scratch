@@ -10,7 +10,7 @@ import { selectionPrerequisite, themePrerequisite } from '@/lib/progressions/rul
 
 async function setup() {
   const db = await testDb()
-  const prof = await createTeacher(db, { email: 'p@malraux-rabat.org', username: 'p', firstName: 'P', lastName: 'P', passwordHash: 'h', role: 'prof' })
+  const prof = await createTeacher(db, { email: 'p@malraux-rabat.org', username: 'p', firstName: 'P', lastName: 'P', role: 'prof' })
   const c = await createClass(db, prof.id, { name: '4e A', level: '4' })
   const make = async (title: string, status: 'draft' | 'published' = 'published') => {
     const { id } = await createActivity(db, { title })

@@ -2,20 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { testDb } from './helpers/db'
 import { createTeacher } from '@/lib/db/teachers'
-import { createStudent, findStudentById } from '@/lib/db/students'
+import { createStudent } from '@/lib/db/students'
 import { addToLevel, setActivityStatus, upsertBreizhActivity } from '@/lib/db/activities'
 import { recordSave, restartProgress, submitProgress, getProgress } from '@/lib/db/progress'
 import { addEmailsToClass, createClass } from '@/lib/db/classes'
 import { progress, reviews } from '@/lib/db/schema'
 import { addAssignments, setAssignmentDue, studentDeadline } from '@/lib/db/assignments'
-import { verifyPassword } from '@/lib/auth/password'
-import { countReviewQueue, decide, getReviewView, pendingByClass, queueNeighbors, resetStudentPassword, reviewQueue, studentOverview } from '@/lib/review/service'
+import { countReviewQueue, decide, getReviewView, pendingByClass, queueNeighbors, reviewQueue, studentOverview } from '@/lib/review/service'
 
 async function setup() {
   const db = await testDb()
-  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
-  const other = await createTeacher(db, { email: 'david.essai@malraux-rabat.org', username: 'david.essai', firstName: 'David', lastName: 'Essai', passwordHash: 'h', role: 'prof' })
-  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
+  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
+  const other = await createTeacher(db, { email: 'david.essai@malraux-rabat.org', username: 'david.essai', firstName: 'David', lastName: 'Essai', role: 'prof' })
+  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
   const a = await upsertBreizhActivity(db, { sourceRef: 1, title: 'Le serpent', slug: 'le-serpent', statementYoutubeId: null, thumbnail: null })
   await addToLevel(db, { level: '6', activityId: a.id, position: 1, section: 'defis' })
   await setActivityStatus(db, a.id, 'published')
@@ -120,25 +119,11 @@ describe('décision', () => {
   })
 })
 
-describe('fiche élève et mot de passe provisoire', () => {
+describe('fiche élève', () => {
   it('la fiche liste la progression, seulement pour un enseignant de l’élève', async () => {
     const { db, prof, other, alice } = await setup()
     expect((await studentOverview(db, prof.id, alice.id))?.items).toEqual([expect.objectContaining({ activityTitle: 'Le serpent', status: 'submitted' })])
     expect(await studentOverview(db, other.id, alice.id)).toBeNull()
-  })
-
-  it('génère un mot de passe provisoire et force le changement', async () => {
-    const { db, prof, other, alice } = await setup()
-    expect(await resetStudentPassword(db, other.id, alice.id)).toMatchObject({ ok: false })
-    const res = await resetStudentPassword(db, prof.id, alice.id)
-    expect(res.ok).toBe(true)
-    if (!res.ok) return
-    const updated = (await findStudentById(db, alice.id))!
-    expect(updated.mustChangePassword).toBe(true)
-    expect(await verifyPassword(res.password, updated.passwordHash)).toBe(true)
-    // Trace de la réinitialisation, affichée à l'élève : un abus devient visible et attribuable.
-    expect(updated.passwordResetBy).toBe(prof.id)
-    expect(updated.passwordResetAt).toBeTruthy()
   })
 })
 

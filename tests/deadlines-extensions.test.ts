@@ -11,14 +11,14 @@ import { grantExtension } from '@/lib/deadlines/extensions'
 
 async function setup() {
   const db = await testDb()
-  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
-  const other = await createTeacher(db, { email: 'david.essai@malraux-rabat.org', username: 'david.essai', firstName: 'David', lastName: 'Essai', passwordHash: 'h', role: 'prof' })
+  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
+  const other = await createTeacher(db, { email: 'david.essai@malraux-rabat.org', username: 'david.essai', firstName: 'David', lastName: 'Essai', role: 'prof' })
   const { id: a } = await createActivity(db, { title: 'Le serpent' })
   await setActivityStatus(db, a, 'published')
   const c = await createClass(db, prof.id, { name: '6e A', level: '6' })
   await addAssignments(db, c.id, [a])
   await setAssignmentDue(db, c.id, a, new Date(Date.now() - GRACE_MS - 1000).toISOString())
-  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
+  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
   await addEmailsToClass(db, c.id, [alice.email])
   await closeOverdue(db)
   return { db, prof, other, a, alice }

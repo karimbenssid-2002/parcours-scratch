@@ -1,6 +1,6 @@
 import { asc, eq } from 'drizzle-orm'
 import type { DB } from './client'
-import { teachers } from './schema'
+import { emailIdentity, teachers } from './schema'
 import { normalizeEmail } from '@/lib/auth/validation'
 
 export type Teacher = typeof teachers.$inferSelect
@@ -30,18 +30,12 @@ export async function createTeacher(db: DB, t: NewTeacher): Promise<Teacher> {
   return row
 }
 
-/** prenom.nom, puis prenom.nom2, prenom.nom3… si déjà pris. */
-export async function buildUniqueUsername(db: DB, email: string): Promise<string> {
-  const base = normalizeEmail(email).split('@')[0]
-  for (let n = 1; n <= 50; n++) {
-    const candidate = n === 1 ? base : `${base}${n}`
-    if (!(await findTeacherByUsername(db, candidate))) return candidate
-  }
-  throw new Error('Impossible de générer un identifiant unique')
-}
-
-export async function setTeacherPassword(db: DB, id: string, passwordHash: string, mustChangePassword: boolean): Promise<void> {
-  await db.update(teachers).set({ passwordHash, mustChangePassword }).where(eq(teachers.id, id))
+/**
+ * Comptes dont l'adresse enregistrée a cette identité (partie avant le @, quel que soit le domaine), au plus `limit`.
+ * Jamais par `username`, qui peut porter un suffixe ancien (« prenom.nom2 ») sans rapport avec l'adresse.
+ */
+export async function findTeachersByIdentity(db: DB, identity: string, limit = 2): Promise<Teacher[]> {
+  return db.select().from(teachers).where(eq(emailIdentity(teachers.email), identity.trim().toLowerCase())).limit(limit)
 }
 
 export async function touchTeacherLogin(db: DB, id: string): Promise<void> {

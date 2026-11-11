@@ -3,9 +3,7 @@ import type { DB } from '@/lib/db/client'
 import { activities, classes, classStudents, progress, reviews, students, teachers, REVIEW_DECISIONS, type ProgressStatus, type ReviewDecision } from '@/lib/db/schema'
 import { getActivityDetail, type ActivityDetail } from '@/lib/db/activities'
 import { teacherCanSeeStudent } from '@/lib/db/classes'
-import { setStudentPassword } from '@/lib/db/students'
 import type { Progress } from '@/lib/db/progress'
-import { generateProvisionalPassword, hashPassword } from '@/lib/auth/password'
 import type { Level } from '@/lib/levels'
 import { givesActivityTo, grantExtension } from '@/lib/deadlines/extensions'
 import { parseSchoolDateTime } from '@/lib/deadlines/time'
@@ -154,14 +152,6 @@ export async function studentOverview(db: DB, teacherId: string, studentId: stri
   }).from(progress).innerJoin(activities, eq(activities.id, progress.activityId))
     .where(eq(progress.studentId, studentId)).orderBy(desc(progress.updatedAt))
   return { student, items }
-}
-
-export async function resetStudentPassword(db: DB, teacherId: string, studentId: string): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
-  if (!UUID.test(studentId) || !(await teacherCanSeeStudent(db, teacherId, studentId))) return { ok: false, error: 'Élève introuvable.' }
-  const password = generateProvisionalPassword()
-  await setStudentPassword(db, studentId, await hashPassword(password), true)
-  await db.update(students).set({ passwordResetBy: teacherId, passwordResetAt: new Date().toISOString() }).where(eq(students.id, studentId))
-  return { ok: true, password }
 }
 
 /** Défis voisins dans la file (boutons « précédent / suivant ») ; hors file, « suivant » mène au plus ancien. */

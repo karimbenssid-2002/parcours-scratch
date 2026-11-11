@@ -1,16 +1,23 @@
 import { and, asc, count, eq } from 'drizzle-orm'
 import type { DB } from './client'
 import { teacherRequests } from './schema'
+import { findTeachersByIdentity } from './teachers'
 import { namesFromEmail, normalizeEmail } from '@/lib/auth/validation'
+import { teacherIdentity } from '@/lib/auth/identity'
 
 export type TeacherRequest = typeof teacherRequests.$inferSelect
-export type RequestType = 'registration' | 'reset'
 
-export async function createTeacherRequest(db: DB, type: RequestType, email: string): Promise<void> {
+/**
+ * Demande de compte enseignant. `duplicate` (rien n'est créé) si un compte ou une demande en attente existe déjà pour la
+ * même identité prenom.nom, quel que soit le domaine. L'index unique partiel « teacher_requests_one_pending », porté par
+ * l'identité, tranche entre deux envois simultanés.
+ */
+export async function createTeacherRequest(db: DB, email: string): Promise<'created' | 'duplicate'> {
   const e = normalizeEmail(email)
-  const names = type === 'registration' ? namesFromEmail(e) : { firstName: null, lastName: null }
-  // Demande identique déjà en attente : l'index unique partiel « teacher_requests_one_pending » l'ignore, même en simultané.
-  await db.insert(teacherRequests).values({ type, email: e, ...names }).onConflictDoNothing()
+  if ((await findTeachersByIdentity(db, teacherIdentity(e), 1)).length) return 'duplicate'
+  const inserted = await db.insert(teacherRequests).values({ email: e, ...namesFromEmail(e) }).onConflictDoNothing()
+    .returning({ id: teacherRequests.id })
+  return inserted.length ? 'created' : 'duplicate'
 }
 
 export async function listPendingRequests(db: DB): Promise<TeacherRequest[]> {

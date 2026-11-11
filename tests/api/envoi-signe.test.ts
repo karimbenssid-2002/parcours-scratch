@@ -98,14 +98,14 @@ const rawReq = (route: string, bytes: Uint8Array) =>
   new NextRequest(url(route), { method: 'PUT', body: new Uint8Array(bytes), headers: { 'Content-Type': 'application/octet-stream' } })
 
 async function student(db: DB, email = 'alice.exemple@malraux-rabat.org') {
-  return createStudent(db, { email, passwordHash: 'h' })
+  return createStudent(db, { email })
 }
 
 async function setupDefi() {
   const db = await testDb()
   ctx.db = db
   const alice = await student(db)
-  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
   const a = await upsertBreizhActivity(db, { sourceRef: 3, title: 'Le serpent', slug: 'le-serpent', statementYoutubeId: null, thumbnail: null })
   await setActivityStatus(db, a.id, 'published')
   const cls = await createClass(db, prof.id, { name: '6e A', level: '6' })
@@ -118,7 +118,7 @@ async function setupDefi() {
 async function setupAdmin() {
   const db = await testDb()
   ctx.db = db
-  const admin = await createTeacher(db, { email: 'admin@malraux-rabat.org', username: 'admin', firstName: 'A', lastName: 'B', passwordHash: 'h', role: 'admin' })
+  const admin = await createTeacher(db, { email: 'admin@malraux-rabat.org', username: 'admin', firstName: 'A', lastName: 'B', role: 'admin' })
   const { id } = await createActivity(db, { title: 'Le serpent' })
   ctx.teacher = admin
   return { db, admin: admin as Teacher, activityId: id }

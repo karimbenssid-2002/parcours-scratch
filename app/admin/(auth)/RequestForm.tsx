@@ -2,13 +2,12 @@
 import Link from 'next/link'
 import { useActionState } from 'react'
 import { requestTeacherAccess } from './actions'
-import type { RequestType } from '@/lib/db/teacher-requests'
 import { Alert } from '@/components/ui/Alert'
 import { Field } from '@/components/ui/Field'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 
-export function RequestForm({ type, submitLabel }: { type: RequestType; submitLabel: string }) {
-  const [state, action] = useActionState(requestTeacherAccess.bind(null, type), null)
+export function RequestForm({ submitLabel }: { submitLabel: string }) {
+  const [state, action] = useActionState(requestTeacherAccess, null)
   if (state?.success)
     return (
       <div className="space-y-4">
@@ -20,7 +19,7 @@ export function RequestForm({ type, submitLabel }: { type: RequestType; submitLa
     <form action={action} className="space-y-4">
       {state?.error && <Alert tone="danger">{state.error}</Alert>}
       <Field label="Adresse e-mail de l'établissement" name="email" type="email" autoComplete="email"
-        placeholder="prenom.nom@malraux-rabat.org" required />
+        placeholder="prenom.nom@malraux-rabat.org" hint="Votre adresse @malraux-rabat.org ou @mlfmonde.org." required />
       <SubmitButton className="w-full" pendingLabel="Envoi…">{submitLabel}</SubmitButton>
       <Link className="block text-center text-sm font-semibold text-primary-ink hover:underline" href="/admin/login">Retour à la connexion</Link>
     </form>

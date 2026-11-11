@@ -12,7 +12,7 @@ import {
 
 async function setup() {
   const db = await testDb()
-  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
   const make = async (title: string, status: 'draft' | 'published' = 'published') => {
     const { id } = await createActivity(db, { title })
     await setActivityStatus(db, id, status)
@@ -23,7 +23,7 @@ async function setup() {
   const draft = await make('Brouillon', 'draft')
   const c1 = await createClass(db, prof.id, { name: '6e A', level: '6' })
   const c2 = await createClass(db, prof.id, { name: 'Club', level: '6' })
-  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
+  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
   await addEmailsToClass(db, c1.id, [alice.email])
   return { db, prof, a, b, draft, c1, c2, alice }
 }

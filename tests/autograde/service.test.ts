@@ -54,8 +54,8 @@ function spyClient(): AiClient & { requests: PreparedRequest[] } {
 
 async function setup(opts: { students: ('same' | 'different')[]; ai?: AiClient | null }) {
   const db = await testDb()
-  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
-  const other = await createTeacher(db, { email: 'david.essai@malraux-rabat.org', username: 'david.essai', firstName: 'David', lastName: 'Essai', passwordHash: 'h', role: 'prof' })
+  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
+  const other = await createTeacher(db, { email: 'david.essai@malraux-rabat.org', username: 'david.essai', firstName: 'David', lastName: 'Essai', role: 'prof' })
   const { id: activityId } = await createActivity(db, { title: 'Bonjour' })
   await setActivityStatus(db, activityId, 'published')
   await saveAutogradeSettings(db, activityId, { criteria: ['Le lutin dit Bonjour'], answers: [], keys: [], durationMs: 2000 })
@@ -66,7 +66,7 @@ async function setup(opts: { students: ('same' | 'different')[]; ai?: AiClient |
   const names = ['alice.exemple', 'farid.fictif', 'bob.modele']
   const progressIds: string[] = []
   for (const [i, kind] of opts.students.entries()) {
-    const s = await createStudent(db, { email: `${names[i]}@malraux-rabat.org`, passwordHash: 'h' })
+    const s = await createStudent(db, { email: `${names[i]}@malraux-rabat.org` })
     await addEmailsToClass(db, cls.id, [s.email])
     const rel = `projets/${s.id}/p.sb3`
     // Le travail « différent » contient le prénom de l'élève, qui ne doit jamais partir vers l'IA.

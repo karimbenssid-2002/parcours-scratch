@@ -25,8 +25,8 @@ beforeEach(() => {
 
 async function setup(opts: { published?: boolean; given?: boolean } = {}) {
   const db = await testDb()
-  const student = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
-  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+  const student = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
+  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
   const a = await upsertBreizhActivity(db, { sourceRef: 3, title: 'Le serpent', slug: 'le-serpent', statementYoutubeId: null, thumbnail: null })
   await setActivityStatus(db, a.id, 'published')
   const cls = await createClass(db, prof.id, { name: '6e A', level: '6' })

@@ -16,14 +16,14 @@ const after = (ms: number) => new Date(Date.parse(DUE) + ms)
 
 async function setup() {
   const db = await testDb()
-  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
   const { id: a } = await createActivity(db, { title: 'Le serpent' })
   await setActivityStatus(db, a, 'published')
   const c = await createClass(db, prof.id, { name: '6e A', level: '6' })
   await addAssignments(db, c.id, [a])
   await setAssignmentDue(db, c.id, a, DUE)
-  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
-  const farid = await createStudent(db, { email: 'farid.fictif@malraux-rabat.org', passwordHash: 'h' })
+  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
+  const farid = await createStudent(db, { email: 'farid.fictif@malraux-rabat.org' })
   await addEmailsToClass(db, c.id, [alice.email, farid.email])
   return { db, prof, a, c, alice, farid }
 }
@@ -107,7 +107,7 @@ describe('coût du passage à chaque page', () => {
   it('une fois les échéances rendues, un nouveau passage fait un nombre constant de requêtes, quel que soit le nombre d’élèves', async () => {
     const { db, c } = await setup()
     const emails = Array.from({ length: 30 }, (_, i) => `eleve.n${i}@malraux-rabat.org`)
-    for (const email of emails) await createStudent(db, { email, passwordHash: 'h' })
+    for (const email of emails) await createStudent(db, { email })
     await addEmailsToClass(db, c.id, emails)
     expect(await closeOverdue(db, after(GRACE_MS))).toBe(32)
     const client = (db as unknown as { $client: { query: (...a: unknown[]) => unknown } }).$client

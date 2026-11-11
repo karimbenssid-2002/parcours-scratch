@@ -5,7 +5,6 @@ import { getDb } from '@/lib/db/client'
 import { studentOverview } from '@/lib/review/service'
 import { levelsLabel } from '@/lib/levels'
 import { StatusBadge } from '@/components/eleve/StatusBadge'
-import { ResetPasswordButton } from './ResetPasswordButton'
 import { ReopenForm } from './ReopenForm'
 import { listStudentDefis } from '@/lib/db/assignments'
 import { now } from '@/lib/clock'
@@ -36,7 +35,6 @@ export default async function StudentPage({ params }: { params: Promise<{ studen
         <h1 className="text-[34px] font-semibold leading-tight tracking-[-0.02em]">{name}</h1>
         <p className="text-muted">{student.email} · {levelsLabel(student.levels)}</p>
       </header>
-      <ResetPasswordButton studentId={student.id} studentName={name} />
       <section aria-labelledby="travaux" className="space-y-3">
         <h2 id="travaux" className="text-2xl font-semibold">Défis commencés</h2>
         {items.length === 0 ? (

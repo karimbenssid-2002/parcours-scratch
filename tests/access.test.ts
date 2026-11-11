@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { canPreviewActivity, teacherGate } from '@/lib/auth/access'
 
-const teacher = { isActive: true, mustChangePassword: false, role: 'prof' as const }
+const teacher = { isActive: true, role: 'prof' as const }
 
 describe('teacherGate', () => {
   it('coupe immédiatement un enseignant désactivé, même avec un cookie valide', () => {
     expect(teacherGate({ ...teacher, isActive: false })).toBe('/admin/deconnexion')
     expect(teacherGate(null)).toBe('/admin/deconnexion')
   })
-  it('force le changement de mot de passe sauf sur la page dédiée', () => {
-    expect(teacherGate({ ...teacher, mustChangePassword: true })).toBe('/admin/changer-mot-de-passe')
-    expect(teacherGate({ ...teacher, mustChangePassword: true }, { allowMustChange: true })).toBeNull()
+  it('laisse passer un enseignant actif', () => {
+    expect(teacherGate(teacher)).toBeNull()
   })
   it("réserve les pages admin à l'administrateur", () => {
     expect(teacherGate(teacher, { role: 'admin' })).toBe('/admin')

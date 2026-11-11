@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { testDb } from '../helpers/db'
-import {
-  buildUniqueUsername, createTeacher, findTeacherByEmail, findTeacherByUsername, setTeacherActive,
-} from '@/lib/db/teachers'
+import { createTeacher, findTeacherByEmail, findTeacherByUsername, findTeachersByIdentity, setTeacherActive } from '@/lib/db/teachers'
 import { createTeacherRequest, listPendingRequests } from '@/lib/db/teacher-requests'
 import { approveTeacherRequest } from '@/lib/auth/teacher-approval'
-import { verifyPassword } from '@/lib/auth/password'
 
-const base = { firstName: 'Emma', lastName: 'Test', passwordHash: 'x', role: 'prof' as const }
+const base = { firstName: 'Emma', lastName: 'Test', role: 'prof' as const }
 
 describe('enseignants', () => {
   it('retrouve un compte sans tenir compte de la casse', async () => {
@@ -17,11 +14,11 @@ describe('enseignants', () => {
     expect(await findTeacherByEmail(db, 'EMMA.TEST@MALRAUX-RABAT.ORG')).not.toBeNull()
   })
 
-  it('génère un identifiant unique', async () => {
+  it("retrouve les comptes d'une identité par l'adresse enregistrée, quel que soit le domaine", async () => {
     const db = await testDb()
-    expect(await buildUniqueUsername(db, 'emma.test@malraux-rabat.org')).toBe('emma.test')
-    await createTeacher(db, { ...base, email: 'emma.test@malraux-rabat.org', username: 'emma.test' })
-    expect(await buildUniqueUsername(db, 'emma.test@malraux-rabat.org')).toBe('emma.test2')
+    const t = await createTeacher(db, { ...base, email: 'emma.test@mlfmonde.org', username: 'emma.test2' })
+    expect((await findTeachersByIdentity(db, 'emma.test')).map((r) => r.id)).toEqual([t.id])
+    expect(await findTeachersByIdentity(db, 'emma.test2')).toEqual([])
   })
 
   it('désactive un compte', async () => {
@@ -35,73 +32,35 @@ describe('enseignants', () => {
 describe('demandes et validation', () => {
   it('ne crée pas deux demandes en attente identiques', async () => {
     const db = await testDb()
-    await createTeacherRequest(db, 'registration', 'emma.test@malraux-rabat.org')
-    await createTeacherRequest(db, 'registration', ' Emma.Test@malraux-rabat.org')
+    expect(await createTeacherRequest(db, 'emma.test@malraux-rabat.org')).toBe('created')
+    expect(await createTeacherRequest(db, ' Emma.Test@malraux-rabat.org')).toBe('duplicate')
     expect(await listPendingRequests(db)).toHaveLength(1)
   })
 
   it('deux demandes simultanées identiques ne créent qu’une demande en attente', async () => {
     const db = await testDb()
     await Promise.all([
-      createTeacherRequest(db, 'registration', 'emma.test@malraux-rabat.org'),
-      createTeacherRequest(db, 'registration', 'emma.test@malraux-rabat.org'),
+      createTeacherRequest(db, 'emma.test@malraux-rabat.org'),
+      createTeacherRequest(db, 'emma.test@malraux-rabat.org'),
     ])
     expect(await listPendingRequests(db)).toHaveLength(1)
   })
 
-  it('valide une inscription : compte prof, mot de passe provisoire, changement forcé', async () => {
+  it('valide une inscription : compte prof sans mot de passe, noms tirés de l’adresse', async () => {
     const db = await testDb()
-    await createTeacherRequest(db, 'registration', 'marie-anne.el-fictif@malraux-rabat.org')
+    await createTeacherRequest(db, 'marie-anne.el-fictif@malraux-rabat.org')
     const [req] = await listPendingRequests(db)
     const res = await approveTeacherRequest(db, req.id)
-    expect(res.ok).toBe(true)
-    if (!res.ok) return
-    const t = await findTeacherByUsername(db, res.username)
-    expect(t).toMatchObject({ role: 'prof', mustChangePassword: true, firstName: 'Marie-Anne', lastName: 'El-Fictif' })
-    expect(await verifyPassword(res.password, t!.passwordHash)).toBe(true)
+    expect(res).toEqual({ ok: true, username: 'marie-anne.el-fictif' })
+    expect(await findTeacherByUsername(db, 'marie-anne.el-fictif')).toMatchObject({ role: 'prof', firstName: 'Marie-Anne', lastName: 'El-Fictif' })
     expect(await listPendingRequests(db)).toHaveLength(0)
   })
 
   it('refuse de valider deux fois la même demande', async () => {
     const db = await testDb()
-    await createTeacherRequest(db, 'registration', 'emma.test@malraux-rabat.org')
+    await createTeacherRequest(db, 'emma.test@malraux-rabat.org')
     const [req] = await listPendingRequests(db)
     await approveTeacherRequest(db, req.id)
     expect(await approveTeacherRequest(db, req.id)).toEqual({ ok: false, error: 'Demande introuvable ou déjà traitée.' })
-  })
-
-  it('réinitialise le mot de passe d’un compte existant', async () => {
-    const db = await testDb()
-    await createTeacher(db, { ...base, email: 'emma.test@malraux-rabat.org', username: 'emma.test', mustChangePassword: false })
-    await createTeacherRequest(db, 'reset', 'emma.test@malraux-rabat.org')
-    const [req] = await listPendingRequests(db)
-    const res = await approveTeacherRequest(db, req.id)
-    expect(res).toMatchObject({ ok: true, username: 'emma.test' })
-    expect((await findTeacherByUsername(db, 'emma.test'))?.mustChangePassword).toBe(true)
-  })
-
-  it('échoue proprement sur une réinitialisation sans compte', async () => {
-    const db = await testDb()
-    await createTeacherRequest(db, 'reset', 'inconnu.prof@malraux-rabat.org')
-    const [req] = await listPendingRequests(db)
-    expect(await approveTeacherRequest(db, req.id)).toEqual({ ok: false, error: 'Aucun compte pour cet e-mail.' })
-  })
-
-  it('deux validations simultanées : une seule réussit, l’autre échoue proprement (inscription)', async () => {
-    const db = await testDb()
-    await createTeacherRequest(db, 'registration', 'emma.test@malraux-rabat.org')
-    const [req] = await listPendingRequests(db)
-    const results = await Promise.all([approveTeacherRequest(db, req.id), approveTeacherRequest(db, req.id)])
-    expect(results.filter((r) => r.ok)).toHaveLength(1)
-    expect(results.find((r) => !r.ok)).toEqual({ ok: false, error: 'Demande introuvable ou déjà traitée.' })
-  })
-
-  it('deux validations simultanées : un seul mot de passe provisoire émis (réinitialisation)', async () => {
-    const db = await testDb()
-    await createTeacher(db, { ...base, email: 'emma.test@malraux-rabat.org', username: 'emma.test', mustChangePassword: false })
-    await createTeacherRequest(db, 'reset', 'emma.test@malraux-rabat.org')
-    const [req] = await listPendingRequests(db)
-    const results = await Promise.all([approveTeacherRequest(db, req.id), approveTeacherRequest(db, req.id)])
-    expect(results.filter((r) => r.ok)).toHaveLength(1)
   })
 })

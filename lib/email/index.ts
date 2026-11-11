@@ -2,7 +2,7 @@ export type EmailMessage = { to: string; subject: string; text: string }
 
 /**
  * Avec RESEND_API_KEY (et EMAIL_FROM), le message part par l'API HTTP de Resend ; sinon il est écrit dans la console du serveur
- * (en production, sans le corps : il peut contenir un mot de passe provisoire, et la console est celle des logs de l'hébergeur).
+ * (en production, sans le corps : la console est celle des logs de l'hébergeur).
  * Ne lève jamais d'exception : un échec d'envoi renvoie `delivered: false` (sans message ni clé dans les logs).
  */
 export async function sendEmail(msg: EmailMessage): Promise<{ delivered: boolean }> {

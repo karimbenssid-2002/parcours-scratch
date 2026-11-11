@@ -106,7 +106,7 @@ describe('progressions', () => {
 
   it('supprimer un thème ne retire rien des classes, supprimer une activité la retire de ses thèmes', async () => {
     const { db, make } = await setup()
-    const prof = await createTeacher(db, { email: 'p@malraux-rabat.org', username: 'p', firstName: 'P', lastName: 'P', passwordHash: 'h', role: 'prof' })
+    const prof = await createTeacher(db, { email: 'p@malraux-rabat.org', username: 'p', firstName: 'P', lastName: 'P', role: 'prof' })
     const c = await createClass(db, prof.id, { name: '4e A', level: '4' })
     const x = await make('X'); const y = await make('Y')
     const t1 = await createTheme(db, { level: '4', title: 'Un' })

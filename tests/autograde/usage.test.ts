@@ -10,8 +10,8 @@ import { monthlyUsage } from '@/lib/autograde/usage'
 describe('consommation de la correction automatique', () => {
   it('compte les corrections et le coût du mois (lot à moitié prix)', async () => {
     const db = await testDb()
-    const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
-    const s = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
+    const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
+    const s = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
     const { id: a } = await createActivity(db, { title: 'A' })
     await recordSave(db, s.id, a, 'p.sb3')
     const p = (await db.select().from(progress).limit(1))[0]!

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray } from 'drizzle-orm'
+import { and, asc, count, eq, inArray, sql } from 'drizzle-orm'
 import type { DB } from './client'
 import { classes, classStudents, progress, students, teachers, type ProgressStatus } from './schema'
 import type { ParcoursItem } from './activities'
@@ -65,6 +65,12 @@ export async function listClassMembers(db: DB, classId: string): Promise<ClassMe
       email: r.email,
       student: r.id ? { id: r.id, firstName: r.firstName!, lastName: r.lastName! } : null,
     }))
+}
+
+/** L'adresse figure-t-elle dans au moins une liste de classe ? Casse ignorée (anciennes lignes saisies telles quelles). */
+export async function isEmailInAnyClass(db: DB, email: string): Promise<boolean> {
+  return (await db.select({ email: classStudents.studentEmail }).from(classStudents)
+    .where(eq(sql`lower(${classStudents.studentEmail})`, normalizeEmail(email))).limit(1)).length === 1
 }
 
 export async function studentClasses(db: DB, studentEmail: string): Promise<{ id: string; name: string; level: Level }[]> {

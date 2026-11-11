@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
+import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core'
 import { LEVELS } from '@/lib/levels'
 
 const id = () => text('id').primaryKey().$defaultFn(() => crypto.randomUUID())
@@ -19,17 +19,17 @@ export const teachers = pgTable('teachers', {
   firstName: text('first_name').notNull(),
   lastName: text('last_name').notNull(),
   username: text('username').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ['admin', 'prof'] }).notNull(),
   isActive: boolean('is_active').notNull().default(true),
-  mustChangePassword: boolean('must_change_password').notNull().default(true),
   createdAt: nowIso('created_at'),
   lastLoginAt: text('last_login_at'),
 }).enableRLS()
 
+/** Identité d'un enseignant en SQL : partie avant le @ de l'adresse, en minuscules (même règle que teacherIdentity). */
+export const emailIdentity = (email: AnyPgColumn) => sql`lower(split_part(${email}, '@', 1))`
+
 export const teacherRequests = pgTable('teacher_requests', {
   id: id(),
-  type: text('type', { enum: ['registration', 'reset'] }).notNull(),
   email: text('email').notNull(),
   firstName: text('first_name'),
   lastName: text('last_name'),
@@ -37,8 +37,8 @@ export const teacherRequests = pgTable('teacher_requests', {
   createdAt: nowIso('created_at'),
   processedAt: text('processed_at'),
 }, (t) => [
-  // Une seule demande en attente par type et par e-mail, même si deux envois arrivent ensemble.
-  uniqueIndex('teacher_requests_one_pending').on(t.type, t.email).where(sql`status = 'pending'`),
+  // Une seule demande en attente par identité (prenom.nom, quel que soit le domaine), même si deux envois arrivent ensemble.
+  uniqueIndex('teacher_requests_one_pending').on(emailIdentity(t.email)).where(sql`status = 'pending'`),
 ]).enableRLS()
 
 export const students = pgTable('students', {
@@ -46,11 +46,6 @@ export const students = pgTable('students', {
   email: text('email').notNull().unique(),
   firstName: text('first_name').notNull(),
   lastName: text('last_name').notNull(),
-  passwordHash: text('password_hash').notNull(),
-  mustChangePassword: boolean('must_change_password').notNull().default(false),
-  // Dernière réinitialisation par un enseignant : affichée à l'élève (un abus devient visible et attribuable).
-  passwordResetBy: text('password_reset_by').references(() => teachers.id, { onDelete: 'set null' }),
-  passwordResetAt: text('password_reset_at'),
   createdAt: nowIso('created_at'),
   lastLoginAt: text('last_login_at'),
 }).enableRLS()

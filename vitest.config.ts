@@ -12,7 +12,6 @@ export default defineConfig({
     testTimeout: 30_000,
     env: {
       AUTOGRADE_ENABLED: '1', // la correction est active dans les tests ; enabled.test.ts la retire pour vérifier le cas contraire
-      STUDENT_REGISTRATION_OPEN: '1', // inscriptions des élèves ouvertes ; registration.test.ts les ferme
       AUTH_SECRET: 'test-admin-secret-0123456789abcdef0123',
       STUDENT_AUTH_SECRET: 'test-student-secret-0123456789abcdef01',
     },

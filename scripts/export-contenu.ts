@@ -41,7 +41,7 @@ function printPlan(plan: Pick<ExportPlan, 'tables' | 'missing' | 'staticThumbnai
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run')
-  const { DATABASE_URL, ADMIN_EMAIL, ADMIN_INITIAL_PASSWORD } = process.env
+  const { DATABASE_URL, ADMIN_EMAIL } = process.env
   if (!DATABASE_URL) throw new Error('DATABASE_URL (base cible) est requis.')
   const source = { sqliteFile: process.env.EXPORT_SQLITE_FILE ?? 'data/app.db', storageDir: process.env.EXPORT_STORAGE_DIR ?? 'storage' }
   console.log(`Source : ${source.sqliteFile} (lecture seule), fichiers de ${source.storageDir}`)
@@ -55,12 +55,12 @@ async function main() {
     return
   }
 
-  if (!ADMIN_EMAIL || !ADMIN_INITIAL_PASSWORD) throw new Error('ADMIN_EMAIL et ADMIN_INITIAL_PASSWORD sont requis.')
+  if (!ADMIN_EMAIL) throw new Error('ADMIN_EMAIL est requis.')
   const db = await createDb(DATABASE_URL) // applique aussi les migrations
-  const res = await exportContent(source, { db, write: writeStored }, { admin: { email: ADMIN_EMAIL, password: ADMIN_INITIAL_PASSWORD } })
+  const res = await exportContent(source, { db, write: writeStored }, { admin: { email: ADMIN_EMAIL } })
   console.log('Lignes copiées :')
   printPlan(res, res.files)
-  console.log(`Compte admin : ${res.admin === 'created' ? 'créé (changement de mot de passe à la 1re connexion)' : 'déjà présent, inchangé'}`)
+  console.log(`Compte admin : ${res.admin === 'created' ? 'créé (connexion avec Google, par cette adresse)' : 'déjà présent, inchangé'}`)
 }
 
 main().then(() => process.exit(0), (e) => {

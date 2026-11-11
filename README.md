@@ -17,8 +17,11 @@ npm run seed                 # crée la base (migrations) et le compte admin
 npm run dev                  # http://localhost:3000 (élèves) et http://localhost:3000/admin (enseignants)
 ```
 
+- Connexion : sans `GOOGLE_CLIENT_ID`, les pages `/connexion` et `/admin/login` proposent en local une **connexion de
+  développement** (choisir un compte existant de la base locale), à la place du bouton « Se connecter avec Google ».
+  Elle répond 404 en production (`NODE_ENV=production`), sur Vercel, ou dès que `GOOGLE_CLIENT_ID` est défini.
 - La base PGlite ne s'ouvre que dans un processus à la fois : arrêter `npm run dev` avant `npm run seed`.
-- Les e-mails (mots de passe provisoires, notifications) s'affichent dans la console du serveur tant que `RESEND_API_KEY` n'est pas défini.
+- Les e-mails (notifications) s'affichent dans la console du serveur tant que `RESEND_API_KEY` n'est pas défini.
 - Un dépôt fraîchement cloné démarre **sans aucun défi** : ils se créent depuis l'espace admin (`/admin`).
 
 ## Variables d'environnement
@@ -28,9 +31,9 @@ Toutes sont décrites dans [`.env.example`](.env.example).
 | Variable | Rôle |
 | --- | --- |
 | `AUTH_SECRET`, `STUDENT_AUTH_SECRET` | Secrets des sessions enseignants et élèves (32 caractères minimum, différents) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Connexion avec Google (serveur seulement) : Google Cloud Console → Identifiants → ID client OAuth (application Web) ; adresse de retour à déclarer `<origine>/auth/google/callback`, soit `https://parcours-scratch.vercel.app/auth/google/callback` en ligne |
 | `DATABASE_URL` | `pglite:data/dev-pg` en local ; URL du pooler Supabase (mode transaction) en ligne |
-| `ADMIN_EMAIL`, `ADMIN_INITIAL_PASSWORD` | Compte administrateur créé par `npm run seed` ; identifiant de connexion = partie de l'e-mail avant `@` ; mot de passe de 12 caractères minimum, différent de l'exemple (à changer à la 1re connexion) |
-| `STUDENT_REGISTRATION_OPEN` | `1` ouvre l'inscription des élèves par mot de passe (local) ; **ne pas définir en ligne tant que la connexion Google n'est pas en place** |
+| `ADMIN_EMAIL` | Compte administrateur créé par `npm run seed`, sans mot de passe : il se connecte avec Google, par cette adresse exacte |
 | `CRON_SECRET` | En ligne : secret de la tâche quotidienne `/api/cron/veille` (voir plus bas) |
 | `ADMIN_NOTIFY_EMAIL` | Destinataire des notifications (demandes de compte enseignant) |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Envoi réel des e-mails via Resend (facultatif) |
@@ -69,7 +72,7 @@ Les tests créent des comptes fictifs uniquement dans cette base en mémoire. `t
    la Data API dans les réglages du projet (le site ne s'en sert pas).
 2. **Fichier `.env.production.local`** (jamais versionné) : les scripts lancés vers la base en ligne le lisent —
    `npm run export:contenu` et `npm run db:migrate`. Y mettre `DATABASE_URL` (pooler Supabase), `ADMIN_EMAIL`,
-   `ADMIN_INITIAL_PASSWORD`, `STORAGE_BACKEND=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` et `SUPABASE_BUCKET`.
+   `STORAGE_BACKEND=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` et `SUPABASE_BUCKET`.
    `npm run seed`, lui, lit `.env.local` (base locale) ; pour l'appliquer à la base en ligne :
    `npx tsx --conditions=react-server --env-file=.env.production.local scripts/seed.ts`.
 3. **Contenu** (facultatif) : `npm run export:contenu` est l'outil de migration du site d'origine. Il lit une base
@@ -83,10 +86,11 @@ Les tests créent des comptes fictifs uniquement dans cette base en mémoire. `t
    Supabase ne mette pas le projet en pause (offre gratuite : pause après une semaine sans activité).
    Renseigner les variables d'environnement `AUTH_SECRET`, `STUDENT_AUTH_SECRET`, `DATABASE_URL`, `ADMIN_NOTIFY_EMAIL`,
    `RESEND_API_KEY`, `EMAIL_FROM`, `STORAGE_BACKEND=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET`
-   et `CRON_SECRET` (longue chaîne aléatoire ; Vercel l'envoie à la tâche planifiée).
+   et `CRON_SECRET` (longue chaîne aléatoire ; Vercel l'envoie à la tâche planifiée), ainsi que `GOOGLE_CLIENT_ID` et
+   `GOOGLE_CLIENT_SECRET` (sensibles ; adresse de retour déclarée chez Google :
+   `https://parcours-scratch.vercel.app/auth/google/callback`).
    **Ne pas définir en ligne** : `AUTOGRADE_ENABLED` (la correction automatique a besoin de Chromium et d'un serveur qui reste
-   allumé), `ANTHROPIC_API_KEY`, `AUTOGRADE_FAKE_AI`, `E2E_CLOCK`, `STORAGE_DIR`, et `STUDENT_REGISTRATION_OPEN` tant que la
-   connexion Google n'est pas en place.
+   allumé), `ANTHROPIC_API_KEY`, `AUTOGRADE_FAKE_AI`, `E2E_CLOCK` et `STORAGE_DIR`.
 5. **Changements de schéma** : après une nouvelle migration (`npm run db:generate`), `npm run db:migrate` l'applique à la
    base en ligne (`.env.production.local`).
 
@@ -94,7 +98,9 @@ Les tests créent des comptes fictifs uniquement dans cette base en mémoire. `t
 
 - `app/(eleve)` : espace élève ; `app/admin` : espace enseignants et admin ; `app/api` : fichiers (projets, vignettes, corrigés).
 - `lib/db/` : **seul** point d'accès à la base (Drizzle ; migrations dans `drizzle/`).
-- `lib/auth/` : sessions JWT séparées (`admin_session`, `student_session`), routage (`routing.ts`, utilisé par `proxy.ts`),
+- `lib/auth/` : connexion avec Google (`google.ts` : OpenID Connect avec PKCE, `state` et `nonce` ; `identity.ts` : domaines
+  du collège et identité `prenom.nom` ; `google-login.ts` : qui entre ; routes `app/auth/`),
+  sessions JWT séparées (`admin_session`, `student_session`), routage (`routing.ts`, utilisé par `proxy.ts`),
   limitation des tentatives de connexion en base, revérification des droits côté serveur (`session.ts`).
 - `lib/storage/` : fichiers en local ou dans Supabase Storage (envois directs par URL signée).
 - `lib/autograde/` : correction automatique (exécution des projets dans Chromium, propositions de l'IA).

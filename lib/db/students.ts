@@ -23,12 +23,12 @@ export async function findStudentById(db: DB, id: string): Promise<Student | nul
   return row ?? null
 }
 
-export async function createStudent(db: DB, input: { email: string; passwordHash: string }): Promise<Student> {
+export async function createStudent(db: DB, input: { email: string }): Promise<Student> {
   const email = normalizeEmail(input.email)
   if (await findStudentByEmail(db, email)) throw new StudentExistsError()
   try {
     const [row] = await db.insert(students)
-      .values({ email, ...namesFromEmail(email), passwordHash: input.passwordHash })
+      .values({ email, ...namesFromEmail(email) })
       .returning()
     return row
   } catch (e) {
@@ -36,10 +36,6 @@ export async function createStudent(db: DB, input: { email: string; passwordHash
     if (isUniqueViolation(e)) throw new StudentExistsError()
     throw e
   }
-}
-
-export async function setStudentPassword(db: DB, id: string, passwordHash: string, mustChangePassword: boolean): Promise<void> {
-  await db.update(students).set({ passwordHash, mustChangePassword }).where(eq(students.id, id))
 }
 
 export async function touchStudentLogin(db: DB, id: string): Promise<void> {

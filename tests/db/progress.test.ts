@@ -9,7 +9,7 @@ import { getProgress, latestReview, progressByActivity, recentReviewsForStudent,
 
 async function setup() {
   const db = await testDb()
-  const s = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
+  const s = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
   const a = await upsertBreizhActivity(db, { sourceRef: 1, title: 'Défi', slug: 'defi', statementYoutubeId: null, thumbnail: null })
   return { db, studentId: s.id, activityId: a.id }
 }
@@ -60,7 +60,7 @@ describe('progression', () => {
     const { db, studentId, activityId } = await setup()
     await recordSave(db, studentId, activityId, 'projets/x.sb3')
     const p = (await getProgress(db, studentId, activityId))!
-    const t = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+    const t = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
     await db.insert(reviews).values({ progressId: p.id, teacherId: t.id, decision: 'needs_work', comment: 'Le serpent ne tourne pas.', createdAt: '2026-10-01T10:00:00.000Z' })
     await db.insert(reviews).values({ progressId: p.id, teacherId: t.id, decision: 'almost', comment: 'Presque !', createdAt: '2026-10-02T10:00:00.000Z' })
     expect(await latestReview(db, p.id)).toMatchObject({ decision: 'almost', comment: 'Presque !', teacherName: 'Emma Test' })
@@ -71,8 +71,8 @@ describe('derniers retours de l’élève', () => {
   it('liste les commentaires de ses défis, du plus récent au plus ancien, limités et filtrés', async () => {
     const { db, studentId, activityId } = await setup()
     const other = await upsertBreizhActivity(db, { sourceRef: 2, title: 'Autre défi', slug: 'autre', statementYoutubeId: null, thumbnail: null })
-    const intrus = await createStudent(db, { email: 'bob.essai@malraux-rabat.org', passwordHash: 'h' })
-    const t = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+    const intrus = await createStudent(db, { email: 'bob.essai@malraux-rabat.org' })
+    const t = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
     await recordSave(db, studentId, activityId, 'projets/a.sb3')
     await recordSave(db, studentId, other.id, 'projets/b.sb3')
     await recordSave(db, intrus.id, activityId, 'projets/c.sb3')
@@ -98,7 +98,7 @@ describe('derniers retours de l’élève', () => {
 describe('derniers retours de l’élève : seule la dernière décision de chaque défi compte', () => {
   it('une validation sans commentaire masque l’ancien « non réussi » commenté', async () => {
     const { db, studentId, activityId } = await setup()
-    const t = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+    const t = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
     await recordSave(db, studentId, activityId, 'projets/a.sb3')
     const p = (await getProgress(db, studentId, activityId))!
     await db.insert(reviews).values({ progressId: p.id, teacherId: t.id, decision: 'needs_work', comment: 'Il manque le virage.', createdAt: '2026-10-01T10:00:00.000Z' })
@@ -111,7 +111,7 @@ describe('derniers retours de l’élève : seule la dernière décision de chaq
 
   it('deux décisions commentées sur le même défi : seule la plus récente apparaît', async () => {
     const { db, studentId, activityId } = await setup()
-    const t = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+    const t = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
     await recordSave(db, studentId, activityId, 'projets/a.sb3')
     const p = (await getProgress(db, studentId, activityId))!
     await db.insert(reviews).values({ progressId: p.id, teacherId: t.id, decision: 'needs_work', comment: 'Ancien', createdAt: '2026-10-01T10:00:00.000Z' })

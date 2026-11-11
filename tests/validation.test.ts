@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSchoolEmail, isValidPassword, namesFromEmail, normalizeEmail } from '@/lib/auth/validation'
+import { emailDomain, isSchoolEmail, namesFromEmail, normalizeEmail } from '@/lib/auth/validation'
 
 describe('isSchoolEmail', () => {
   it.each([
@@ -18,6 +18,23 @@ describe('isSchoolEmail', () => {
     'emma.test@',
     '',
   ])('refuse %s', (e) => expect(isSchoolEmail(e)).toBe(false))
+
+  it('accepte une liste de domaines', () => {
+    const both = ['malraux-rabat.org', 'mlfmonde.org']
+    expect(isSchoolEmail('bob.modele@mlfmonde.org')).toBe(false)
+    expect(isSchoolEmail('Bob.Modele@MLFmonde.org', both)).toBe(true)
+    expect(isSchoolEmail('bob.modele@malraux-rabat.org', both)).toBe(true)
+    expect(isSchoolEmail('bob.modele@gmail.com', both)).toBe(false)
+  })
+})
+
+describe('emailDomain', () => {
+  it('rend le domaine en minuscules, ou null', () => {
+    expect(emailDomain(' Bob.Modele@MLFmonde.org ')).toBe('mlfmonde.org')
+    expect(emailDomain('@malraux-rabat.org')).toBeNull()
+    expect(emailDomain('bob.modele@')).toBeNull()
+    expect(emailDomain('bob.modele')).toBeNull()
+  })
 })
 
 describe('normalizeEmail', () => {
@@ -31,14 +48,5 @@ describe('namesFromEmail', () => {
     expect(namesFromEmail('emma.test@malraux-rabat.org')).toEqual({ firstName: 'Emma', lastName: 'Test' })
     expect(namesFromEmail('marie-anne.el-fictif@malraux-rabat.org')).toEqual({ firstName: 'Marie-Anne', lastName: 'El-Fictif' })
     expect(namesFromEmail('chloe.modele2@malraux-rabat.org')).toEqual({ firstName: 'Chloe', lastName: 'Modele' })
-  })
-})
-
-describe('isValidPassword', () => {
-  it('impose 8 à 128 caractères', () => {
-    expect(isValidPassword('1234567')).toBe(false)
-    expect(isValidPassword('12345678')).toBe(true)
-    expect(isValidPassword('x'.repeat(129))).toBe(false)
-    expect(isValidPassword(null)).toBe(false)
   })
 })

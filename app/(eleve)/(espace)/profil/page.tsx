@@ -3,7 +3,6 @@ import { requireStudent } from '@/lib/auth/session'
 import { getDb } from '@/lib/db/client'
 import { studentClasses } from '@/lib/db/classes'
 import { levelLabel } from '@/lib/levels'
-import { PasswordForm } from './ProfileForms'
 
 export const metadata = { title: 'Mon profil' }
 
@@ -21,10 +20,6 @@ export default async function ProfilePage() {
             ? 'Ton professeur ne t’a pas encore inscrit dans une classe.'
             : <>Classe{classes.length > 1 ? 's' : ''} : <strong>{classes.map((c) => `${c.name} (${levelLabel(c.level)})`).join(', ')}</strong></>}
         </p>
-      </section>
-      <section className="glass p-6">
-        <h2 className="mb-4 text-2xl font-semibold">Changer de mot de passe</h2>
-        <PasswordForm />
       </section>
       {/* Sur téléphone, la déconnexion n'est pas dans la barre du haut. */}
       <a href="/deconnexion" className="glass flex items-center gap-3 p-4 font-semibold md:hidden">

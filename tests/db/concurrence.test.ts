@@ -9,7 +9,7 @@ import { recordSave } from '@/lib/db/progress'
 describe('accès concurrents', () => {
   it('deux sauvegardes simultanées ne créent qu’une progression', async () => {
     const db = await testDb()
-    const s = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
+    const s = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
     const a = await upsertBreizhActivity(db, { sourceRef: 1, title: 'Défi', slug: 'defi', statementYoutubeId: null, thumbnail: null })
     const results = await Promise.all([
       recordSave(db, s.id, a.id, 'projets/p1.sb3'),

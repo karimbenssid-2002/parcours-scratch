@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { signAdmin, signStudent, verifyAdmin, verifyStudent } from '@/lib/auth/jwt'
 
-const admin = { teacherId: 't1', username: 'emma.test', role: 'prof' as const, mustChangePassword: true }
-const student = { studentId: 's1', mustChangePassword: false }
+const admin = { teacherId: 't1', username: 'emma.test', role: 'prof' as const }
+const student = { studentId: 's1' }
 
 describe('jwt', () => {
   it('signe et vérifie une session enseignant', async () => {

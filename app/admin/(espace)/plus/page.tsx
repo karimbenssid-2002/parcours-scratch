@@ -10,7 +10,7 @@ export const metadata = { title: 'Plus' }
 const ADMIN_LINKS = [
   { href: '/admin/activites', label: 'Activités', hint: 'Le stock de défis', icon: Puzzle },
   { href: '/admin/parcours', label: 'Progressions', hint: 'Thèmes et défis proposés aux profs', icon: ListOrdered },
-  { href: '/admin/eleves', label: 'Élèves', hint: 'Comptes et mots de passe', icon: GraduationCap },
+  { href: '/admin/eleves', label: 'Élèves', hint: 'Comptes élèves', icon: GraduationCap },
   { href: '/admin/correction', label: 'Correction automatique', hint: 'Solutions et critères', icon: Bot },
   { href: '/admin/demandes', label: 'Demandes', hint: 'Demandes de compte enseignant', icon: Inbox, requests: true },
   { href: '/admin/enseignants', label: 'Enseignants', hint: 'Comptes enseignants', icon: Users },

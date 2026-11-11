@@ -6,12 +6,20 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-/** Adresse de l'établissement au format prenom.nom@malraux-rabat.org */
-export function isSchoolEmail(email: string): boolean {
+/** Domaine d'une adresse (en minuscules), ou null si l'adresse n'a pas la forme partie@domaine. */
+export function emailDomain(email: string): string | null {
   const e = normalizeEmail(email)
   const at = e.lastIndexOf('@')
-  if (at <= 0) return false
-  return e.slice(at + 1) === SCHOOL_DOMAIN && LOCAL_PART.test(e.slice(0, at))
+  if (at <= 0 || at === e.length - 1) return null
+  return e.slice(at + 1)
+}
+
+/** Adresse de l'établissement au format prenom.nom@<domaine>, parmi `domains` (par défaut malraux-rabat.org). */
+export function isSchoolEmail(email: string, domains: readonly string[] = [SCHOOL_DOMAIN]): boolean {
+  const domain = emailDomain(email)
+  if (domain === null || !domains.includes(domain)) return false
+  const e = normalizeEmail(email)
+  return LOCAL_PART.test(e.slice(0, e.lastIndexOf('@')))
 }
 
 const capitalize = (part: string) =>
@@ -21,8 +29,4 @@ export function namesFromEmail(email: string): { firstName: string; lastName: st
   const local = normalizeEmail(email).split('@')[0]
   const [first = '', last = ''] = local.split('.')
   return { firstName: capitalize(first), lastName: capitalize(last.replace(/\d+$/, '')) }
-}
-
-export function isValidPassword(p: unknown): p is string {
-  return typeof p === 'string' && p.length >= 8 && p.length <= 128
 }

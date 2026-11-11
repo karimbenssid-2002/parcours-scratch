@@ -8,7 +8,7 @@ import {
   activities, activityAutograde, activityHelpVideos, appSettings, levelActivities, themeActivities, themes,
 } from '@/lib/db/schema'
 import { thumbnailFile } from '@/lib/activities/thumbnail'
-import { checkAdminToCreate, seedAdmin } from './admin'
+import { seedAdmin } from './admin'
 
 // Export du contenu pédagogique de la base locale (SQLite) vers la base en ligne.
 // Liste fermée : seules ces tables sont lues, dans l'ordre des clés étrangères. Aucune ne pointe vers un compte.
@@ -140,10 +140,8 @@ const CHUNK = 500
  * supprimées localement depuis un export précédent ne sont pas supprimées en ligne.
  */
 export async function exportContent(
-  source: ExportSource, target: ExportTarget, opts: { admin: { email: string; password: string } },
+  source: ExportSource, target: ExportTarget, opts: { admin: { email: string } },
 ): Promise<ExportResult> {
-  // Mot de passe admin refusé : échec avant toute copie (aucun fichier ni aucune ligne écrits).
-  await checkAdminToCreate(target.db, opts.admin)
   const { rows, files, ...plan } = await planExport(source)
 
   for (const rel of files) await target.write(rel, new Uint8Array(fs.readFileSync(path.join(source.storageDir, rel))))

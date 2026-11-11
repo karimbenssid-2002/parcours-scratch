@@ -15,7 +15,7 @@ const A1 = '11111111-1111-4111-8111-111111111111'
 const A2 = '22222222-2222-4222-8222-222222222222'
 const VIGNETTE = `${A1}-1700000000000.webp`
 const NOW = '2026-01-01T00:00:00.000Z'
-const ADMIN = { email: 'admin@exemple.org', password: 'initial-2026' }
+const ADMIN = { email: 'admin@exemple.org' }
 
 /** Base SQLite au format de l'ancienne appli locale : contenu + comptes et travaux d'élèves fictifs. */
 function fabricate(): { sqliteFile: string; storageDir: string } {
@@ -98,7 +98,7 @@ describe('exportContent', () => {
     expect(await db.select().from(classes)).toHaveLength(0)
     const profs = await db.select().from(teachers)
     expect(profs).toHaveLength(1)
-    expect(profs[0]).toMatchObject({ email: ADMIN.email, role: 'admin', mustChangePassword: true })
+    expect(profs[0]).toMatchObject({ email: ADMIN.email, role: 'admin' })
 
     // Valeurs converties : booléen SQLite 0/1, entier, null conservé.
     expect((await db.select().from(themes))[0]).toMatchObject({ id: 'th1', optional: true, createdAt: NOW })
@@ -110,31 +110,20 @@ describe('exportContent', () => {
     expect(await db.select().from(appSettings)).toEqual([{ key: 'reglage', value: 'valeur' }])
   })
 
-  it("mot de passe admin refusé (valeur d'exemple, trop court) : échec avant toute copie", async () => {
-    const db = await testDb()
-    for (const password of ['changer-moi-2026', 'court-2026']) {
-      const { written, write } = memoryWrite()
-      await expect(exportContent(source, { db, write }, { admin: { ...ADMIN, password } })).rejects.toThrow(/ADMIN_INITIAL_PASSWORD/)
-      expect(written.size).toBe(0)
-      expect(await db.select().from(activities)).toHaveLength(0)
-      expect(await db.select().from(teachers)).toHaveLength(0)
-    }
-  })
-
   it('un 2e export met le contenu à jour sans toucher au compte admin', async () => {
     const db = await testDb()
     await exportContent(source, { db, write: memoryWrite().write }, { admin: ADMIN })
     const [before] = await db.select().from(teachers)
-    // L'admin a changé son mot de passe en ligne entre-temps.
-    await db.update(teachers).set({ passwordHash: 'nouveau', mustChangePassword: false })
+    // L'admin s'est connecté en ligne entre-temps.
+    await db.update(teachers).set({ lastLoginAt: NOW })
 
     const local = new Database(source.sqliteFile)
     local.prepare(`update activities set title = 'Le serpent (v2)' where id = ?`).run(A1)
     local.close()
 
-    const res = await exportContent(source, { db, write: memoryWrite().write }, { admin: { ...ADMIN, password: 'autre' } })
+    const res = await exportContent(source, { db, write: memoryWrite().write }, { admin: ADMIN })
     expect(res.admin).toBe('exists')
-    expect(await db.select().from(teachers)).toEqual([{ ...before, passwordHash: 'nouveau', mustChangePassword: false }])
+    expect(await db.select().from(teachers)).toEqual([{ ...before, lastLoginAt: NOW }])
     expect(await db.select().from(activities)).toHaveLength(2)
     expect(await db.select().from(activities)).toContainEqual(expect.objectContaining({ id: A1, title: 'Le serpent (v2)' }))
   })

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { decide } from '@/lib/auth/routing'
 import type { AdminClaims, StudentClaims } from '@/lib/auth/jwt'
 
-const prof: AdminClaims = { teacherId: 't', username: 'p', role: 'prof', mustChangePassword: false }
+const prof: AdminClaims = { teacherId: 't', username: 'p', role: 'prof' }
 const admin: AdminClaims = { ...prof, role: 'admin' }
-const eleve: StudentClaims = { studentId: 's', mustChangePassword: false }
+const eleve: StudentClaims = { studentId: 's' }
 
 describe('decide — espace admin', () => {
   it('envoie un anonyme vers la connexion', () => {
@@ -12,14 +12,14 @@ describe('decide — espace admin', () => {
     expect(decide('/admin/demandes', null, eleve)).toEqual({ redirect: '/admin/login' })
   })
   it('laisse passer les pages publiques', () => {
-    for (const p of ['/admin/login', '/admin/demande-compte', '/admin/mot-de-passe-oublie', '/admin/deconnexion'])
+    for (const p of ['/admin/login', '/admin/demande-compte', '/admin/deconnexion'])
       expect(decide(p, null, null)).toBeNull()
   })
-  it('force le changement de mot de passe', () => {
-    const c = { ...prof, mustChangePassword: true }
-    expect(decide('/admin', c, null)).toEqual({ redirect: '/admin/changer-mot-de-passe' })
-    expect(decide('/admin/changer-mot-de-passe', c, null)).toBeNull()
-    expect(decide('/admin/deconnexion', c, null)).toBeNull()
+  it('les anciennes pages de mot de passe ne sont plus publiques', () => {
+    for (const p of ['/admin/mot-de-passe-oublie', '/admin/changer-mot-de-passe'])
+      expect(decide(p, null, null)).toEqual({ redirect: '/admin/login' })
+    expect(decide('/admin', prof, null)).toBeNull()
+    expect(decide('/admin/deconnexion', prof, null)).toBeNull()
   })
   it("renvoie un connecté de la page de connexion vers l'accueil admin", () => {
     expect(decide('/admin/login', prof, null)).toEqual({ redirect: '/admin' })
@@ -44,19 +44,25 @@ describe('decide — espace élève', () => {
   })
   it('laisse passer les pages publiques élève', () => {
     expect(decide('/connexion', null, null)).toBeNull()
-    expect(decide('/premiere-connexion', null, null)).toBeNull()
     expect(decide('/deconnexion', null, null)).toBeNull()
   })
   it('renvoie un élève connecté vers son parcours', () => {
     expect(decide('/connexion', null, eleve)).toEqual({ redirect: '/' })
-    expect(decide('/premiere-connexion', null, eleve)).toEqual({ redirect: '/' })
+    expect(decide('/', null, eleve)).toBeNull()
   })
-  it('force le changement de mot de passe élève', () => {
-    const c = { ...eleve, mustChangePassword: true }
-    expect(decide('/', null, c)).toEqual({ redirect: '/nouveau-mot-de-passe' })
-    expect(decide('/nouveau-mot-de-passe', null, c)).toBeNull()
+  it('les anciennes pages de mot de passe ne sont plus publiques', () => {
+    for (const p of ['/premiere-connexion', '/nouveau-mot-de-passe']) expect(decide(p, null, null)).toEqual({ redirect: '/connexion' })
   })
-  it('bloque /nouveau-mot-de-passe sans session', () => {
-    expect(decide('/nouveau-mot-de-passe', null, null)).toEqual({ redirect: '/connexion' })
+})
+
+describe('decide — connexion (/auth/*)', () => {
+  it('laisse passer /auth/* sans session ou avec une session', () => {
+    for (const p of ['/auth/google/eleve', '/auth/google/enseignant', '/auth/google/callback', '/auth/dev']) {
+      expect(decide(p, null, null)).toBeNull()
+      expect(decide(p, prof, eleve)).toBeNull()
+    }
+  })
+  it("n'ouvre pas pour autant un chemin voisin", () => {
+    expect(decide('/authentification', null, null)).toEqual({ redirect: '/connexion' })
   })
 })

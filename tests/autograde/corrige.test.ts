@@ -10,7 +10,7 @@ import { canSeeSolution, setSolutionShared } from '@/lib/autograde/corrige'
 
 async function setup(withSolution = true) {
   const db = await testDb()
-  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', passwordHash: 'h', role: 'prof' })
+  const prof = await createTeacher(db, { email: 'emma.test@malraux-rabat.org', username: 'emma.test', firstName: 'Emma', lastName: 'Test', role: 'prof' })
   const { id: a } = await createActivity(db, { title: 'Le serpent' })
   await setActivityStatus(db, a, 'published')
   if (withSolution) await setSolution(db, a, `solutions/${a}.sb3`, 'sb3')
@@ -18,7 +18,7 @@ async function setup(withSolution = true) {
   const c2 = await createClass(db, prof.id, { name: '6e B', level: '6' })
   await addAssignments(db, c1.id, [a])
   await addAssignments(db, c2.id, [a])
-  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org', passwordHash: 'h' })
+  const alice = await createStudent(db, { email: 'alice.exemple@malraux-rabat.org' })
   await addEmailsToClass(db, c1.id, [alice.email])
   return { db, prof, a, c1, c2, alice }
 }

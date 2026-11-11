@@ -6,7 +6,7 @@ import { approveTeacherRequest, type ApproveResult } from '@/lib/auth/teacher-ap
 import { markRequest } from '@/lib/db/teacher-requests'
 
 // Pas de revalidatePath ici : la ligne disparaîtrait de la liste (la demande n'est plus « pending »)
-// avant que l'admin ait pu lire le mot de passe provisoire. La page est rafraîchie quand il confirme l'avoir noté.
+// avant que l'admin ait pu lire la confirmation. La page est rafraîchie quand il la ferme.
 export async function approveRequestAction(id: string): Promise<ApproveResult> {
   await requireTeacher({ role: 'admin' })
   return approveTeacherRequest(getDb(), id)
