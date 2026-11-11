@@ -67,6 +67,7 @@ export default async function MorePage() {
         <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-tile-muted text-ink"><LogOut className="size-[18px]" /></span>
         <span className="font-semibold">Se déconnecter</span>
       </a>
+      <p className="text-center text-sm text-muted"><a href="/confidentialite" className="underline">Confidentialité</a></p>
     </div>
   )
 }

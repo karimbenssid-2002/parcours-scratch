@@ -16,6 +16,8 @@ export function decide(
   if (pathname === '/admin/deconnexion' || pathname === '/deconnexion' || pathname.startsWith('/api/')) return null
   // Départ et retour de Google, connexion de développement : avant toute session (les routes vérifient tout elles-mêmes).
   if (under(pathname, '/auth')) return null
+  // Règles de confidentialité : lisibles par tous, connecté ou non (Google les lit aussi).
+  if (under(pathname, '/confidentialite')) return null
 
   if (under(pathname, '/admin')) {
     const isPublic = ADMIN_PUBLIC.some((p) => under(pathname, p))

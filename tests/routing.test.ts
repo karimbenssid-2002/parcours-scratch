@@ -66,3 +66,11 @@ describe('decide — connexion (/auth/*)', () => {
     expect(decide('/authentification', null, null)).toEqual({ redirect: '/connexion' })
   })
 })
+
+describe('decide — règles de confidentialité', () => {
+  it('lisibles par tous, connecté ou non', () => {
+    expect(decide('/confidentialite', null, null)).toBeNull()
+    expect(decide('/confidentialite', null, { studentId: 's1' })).toBeNull()
+    expect(decide('/confidentialite', { teacherId: 't1', username: 'prof.exemple', role: 'prof' }, null)).toBeNull()
+  })
+})

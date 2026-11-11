@@ -21,6 +21,7 @@ export default async function ProfilePage() {
             : <>Classe{classes.length > 1 ? 's' : ''} : <strong>{classes.map((c) => `${c.name} (${levelLabel(c.level)})`).join(', ')}</strong></>}
         </p>
       </section>
+      <p className="text-center text-sm text-muted"><a href="/confidentialite" className="underline">Confidentialité</a></p>
       {/* Sur téléphone, la déconnexion n'est pas dans la barre du haut. */}
       <a href="/deconnexion" className="glass flex items-center gap-3 p-4 font-semibold md:hidden">
         <LogOut className="size-5 text-muted" aria-hidden />Se déconnecter
