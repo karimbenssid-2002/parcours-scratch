@@ -105,5 +105,5 @@ Les tests créent des comptes fictifs uniquement dans cette base en mémoire. `t
 Le code de ce site est distribué sous licence [GNU AGPL-3.0](LICENSE) : il intègre l'éditeur Scratch (scratch-gui / scratch-vm,
 sous AGPL-3.0), dont la licence impose de publier le code source du site mis en ligne.
 
-Contenus des défis inspirés de [isnbreizh.fr/scratch](https://www.isnbreizh.fr/scratch/) (Christophe Béasse, CC BY-NC-SA 4.0).
-Les illustrations des défis (`public/activities/`) en proviennent et sont sous la même licence CC BY-NC-SA 4.0.
+Contenus des défis inspirés des travaux de Christophe Béasse, CC BY-NC-SA 4.0).
+Les illustrations des défis (`public/activities/`) sont sous la même licence CC BY-NC-SA 4.0.
