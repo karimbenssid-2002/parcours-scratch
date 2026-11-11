@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Éditeur Scratch</title>
+  <style>html, body, #app { margin: 0; height: 100%; overflow: hidden; }</style>
+</head>
+<body>
+  <div id="app"></div>
+  <!-- Les chunks de l'éditeur sont chargés relativement à cette page : elle doit rester à côté du script. -->
+  <script src="scratch-gui-standalone.js"></script>
+  <script>
+    (function () {
+      var player = new URLSearchParams(location.search).get('mode') === 'player'
+      var G = window.GUI
+      var app = document.getElementById('app')
+      G.setAppElement(app)
+      var state = new G.EditorState({ locale: 'fr', isPlayerOnly: player })
+      G.createStandaloneRoot(state, app).render({
+        isPlayerOnly: player, canSave: false, canEditTitle: false, showComingSoon: false, backpackVisible: false,
+      })
+
+      function vm() { return state.store.getState().scratchGui.vm }
+      var listeners = []
+      var changed = false
+      var loading = false
+      var loaded = false // aucune exportation tant qu'un projet n'a pas été chargé (sinon on écraserait le travail)
+      var version = 0 // incrémenté à chaque modification
+      var snapshotVersion = -1 // version exportée par le dernier getSb3()
+      function notify() { listeners.forEach(function (cb) { cb(changed) }) }
+
+      var bridge = {
+        ready: false,
+        mode: player ? 'player' : 'edit',
+        load: async function (url) {
+          loading = true
+          try {
+            var res = await fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+            if (!res.ok) throw new Error('HTTP ' + res.status)
+            await vm().loadProject(await res.arrayBuffer())
+            // La VM émet PROJECT_CHANGED pendant le chargement : on attend qu'elle se calme.
+            await new Promise(function (r) { setTimeout(r, 300) })
+            loaded = true
+          } finally {
+            loading = false
+            changed = false
+            notify()
+          }
+        },
+        getSb3: async function () {
+          if (!loaded) throw new Error('Aucun projet chargé')
+          snapshotVersion = version
+          var blob = await vm().saveProjectSb3()
+          return new Uint8Array(await blob.arrayBuffer())
+        },
+        // Ne marque comme sauvegardé que si rien n'a changé depuis l'exportation (modifications pendant l'envoi).
+        markSaved: function () { if (version === snapshotVersion) changed = false; notify() },
+        hasChanges: function () { return changed },
+        onChange: function (cb) {
+          listeners.push(cb)
+          return function () { listeners = listeners.filter(function (l) { return l !== cb }) }
+        },
+        greenFlag: function () { vm().greenFlag() },
+        spriteNames: function () {
+          return vm().runtime.targets.filter(function (t) { return !t.isStage }).map(function (t) { return t.getName() })
+        },
+        vm: vm,
+      }
+
+      function whenReady() {
+        if (!vm()) return setTimeout(whenReady, 50)
+        vm().on('PROJECT_CHANGED', function () {
+          if (loading) return
+          version++
+          if (!changed) { changed = true; notify() }
+        })
+        bridge.ready = true
+        window.scratchBridge = bridge
+        window.parent.postMessage({ type: 'scratch-ready' }, location.origin)
+      }
+      whenReady()
+    })()
+  </script>
+</body>
+</html>

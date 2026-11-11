@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/* Refonte « Deux encres » : l'interface et le travail de l'élève à l'encre bleue,
+   la voix du professeur à l'encre rouge, écrite à la main sur une marge de cahier Seyès.
+   (Version précédente : tag git avant-refonte-deux-encres.) */
+@theme {
+  --color-primary: #1e3f9e;
+  --color-primary-soft: #b9c6ee;
+  --color-primary-ink: #1e3f9e;
+  --color-primary-2: #16307d;
+  --color-primary-wash: #e6ecfb;
+  --color-surface: #eef1f7;
+  --color-nav: #1e3f9e;
+  --color-ink: #141b33;
+  --color-muted: #4f5874;
+  --color-line: #dde2ec;
+  --color-cta: #12804f;
+  --color-cta-sh: #0d6640;
+  --color-danger: #c42f3a;
+  --color-danger-sh: #9c222c;
+  --color-warning: #9c5800;
+  --color-info: #1e5fd0;
+
+  /* Encre du professeur et cahier */
+  --color-encre: #c8261f;
+  --color-marge: #e0473c;
+  --color-seyes: #b3c0ea;
+  --color-seyes-2: #e2e7f7;
+  --color-surligne: #ffd447;
+  --color-surligne-ink: #3a2c00;
+
+  /* Statuts : texte / fond teinté */
+  --color-st-ok: #0f7044;     --color-st-ok-bg: #e0f3e8;
+  --color-st-sent: #5b3fc4;   --color-st-sent-bg: #ece8fb;
+  --color-st-almost: #9c5800; --color-st-almost-bg: #fdf0d9;
+  --color-st-work: #a34a00;   --color-st-work-bg: #ffe9d6;
+  --color-st-bad: #c42f3a;    --color-st-bad-bg: #fde5e6;
+  --color-st-run: #1e5fd0;    --color-st-run-bg: #e4edfc;
+  --color-st-idle: #5d6680;   --color-st-idle-bg: #eef1f6;
+
+  /* Couleurs de niveau (pastilles de classe) */
+  --color-lv6: #12804f; --color-lv5: #1e5fd0; --color-lv4: #c42f3a; --color-lv3: #d9a400;
+
+  /* Surfaces (redéfinies en mode sombre) */
+  --color-panel: #ffffff;
+  --color-panel-solid: #ffffff;
+  --color-panel-border: #dde2ec;
+  --color-tile: #ffffff;
+  --color-tile-muted: #eef1f6;
+  --color-thumb: #ffffff;
+
+  /* Couleurs Scratch : encore utilisées par l'éditeur et quelques pictogrammes */
+  --color-sc-motion: #4c97ff;   --color-sc-motion-sh: #3373cc;
+  --color-sc-looks: #9966ff;    --color-sc-looks-sh: #774dcb;
+  --color-sc-brand: #855cd6;    --color-sc-brand-sh: #5b3cad;
+  --color-sc-events: #ffbf00;   --color-sc-events-sh: #cc9900;
+  --color-sc-control: #ffab19;  --color-sc-control-sh: #cf8b17;
+  --color-sc-pen: #0fbd8c;      --color-sc-pen-sh: #0b8e69;
+  --color-sc-go: #59c059;       --color-sc-go-sh: #389438;
+  --color-sc-pink: #ff6680;     --color-sc-pink-sh: #d94a63;
+  --color-sc-on-light: #1e1b4b;
+  --color-sc-on-yellow: #3d2a00;
+
+  --font-display: var(--font-lexend), system-ui, sans-serif;
+  --font-sans: var(--font-lexend), system-ui, sans-serif;
+  --font-ink: var(--font-kalam), "Segoe Print", cursive;
+  --shadow-clay: 0 1px 2px rgb(20 27 51 / 0.05), 0 14px 32px -24px rgb(20 27 51 / 0.45);
+  --shadow-soft: 0 1px 2px rgb(20 27 51 / 0.06), 0 4px 12px -4px rgb(20 27 51 / 0.1);
+}
+
+html { color-scheme: light; }
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1;
+}
+::selection { background: var(--color-primary-wash); color: var(--color-ink); }
+
+[data-area] {
+  min-height: 100dvh;
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+
+/* Mode sombre de l'espace élève : choix explicite (cookie) ou, sans choix, préférence du système. */
+[data-area="eleve"][data-theme="dark"] {
+  color-scheme: dark;
+  --color-ink: #e8ecf7;
+  --color-muted: #a2abc6;
+  --color-primary-ink: #a9bdff;
+  --color-primary-soft: #3a4a85;
+  --color-primary-wash: #1f2a50;
+  --color-surface: #0d1222;
+  --color-nav: #1a2f72;
+  --color-line: #263050;
+  --color-encre: #ff7b70;
+  --color-marge: #ff6f63;
+  --color-seyes: #2b3658;
+  --color-seyes-2: #1c2440;
+  --color-st-ok: #5ad696;     --color-st-ok-bg: #16301f;
+  --color-st-sent: #b3a2ff;   --color-st-sent-bg: #272246;
+  --color-st-almost: #ffc15e; --color-st-almost-bg: #3a2a10;
+  --color-st-work: #ffab6b;   --color-st-work-bg: #3a2312;
+  --color-st-bad: #ff8088;    --color-st-bad-bg: #3d171c;
+  --color-st-run: #86adff;    --color-st-run-bg: #1b2843;
+  --color-st-idle: #a2abc6;   --color-st-idle-bg: #1d2440;
+  --color-panel: #161d33;
+  --color-panel-solid: #161d33;
+  --color-panel-border: #263050;
+  --color-tile: #1b2340;
+  --color-tile-muted: #1d2440;
+  --color-thumb: #f4f5fb;
+}
+@media (prefers-color-scheme: dark) {
+  [data-area="eleve"]:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-ink: #e8ecf7;
+    --color-muted: #a2abc6;
+    --color-primary-ink: #a9bdff;
+    --color-primary-soft: #3a4a85;
+    --color-primary-wash: #1f2a50;
+    --color-surface: #0d1222;
+    --color-nav: #1a2f72;
+  --color-nav: #1a2f72;
+    --color-line: #263050;
+    --color-encre: #ff7b70;
+    --color-marge: #ff6f63;
+    --color-seyes: #2b3658;
+    --color-seyes-2: #1c2440;
+    --color-st-ok: #5ad696;     --color-st-ok-bg: #16301f;
+    --color-st-sent: #b3a2ff;   --color-st-sent-bg: #272246;
+    --color-st-almost: #ffc15e; --color-st-almost-bg: #3a2a10;
+    --color-st-work: #ffab6b;   --color-st-work-bg: #3a2312;
+    --color-st-bad: #ff8088;    --color-st-bad-bg: #3d171c;
+    --color-st-run: #86adff;    --color-st-run-bg: #1b2843;
+    --color-st-idle: #a2abc6;   --color-st-idle-bg: #1d2440;
+    --color-panel: #161d33;
+    --color-panel-solid: #161d33;
+    --color-panel-border: #263050;
+    --color-tile: #1b2340;
+    --color-tile-muted: #1d2440;
+    --color-thumb: #f4f5fb;
+  }
+}
+
+/* Carte : surface pleine, ombre douce. (Le nom « glass » est conservé : il est utilisé partout.) */
+@utility glass {
+  background-color: var(--color-panel);
+  box-shadow: var(--shadow-clay);
+  border-radius: 16px;
+}
+
+/* Page de cahier Seyès : grands carreaux (32 px) et lignes fines (8 px). */
+@utility seyes {
+  background-color: var(--color-panel);
+  background-image:
+    linear-gradient(var(--color-seyes) 1px, transparent 1px),
+    linear-gradient(var(--color-seyes-2) 1px, transparent 1px);
+  background-size: 100% 32px, 100% 8px;
+}
+/* Marge rouge du cahier, à gauche du bloc. */
+@utility marge {
+  position: relative;
+  padding-left: 58px;
+  &::before { content: ""; position: absolute; left: 38px; top: 0; bottom: 0; width: 2px; background: var(--color-marge); }
+}
+/* Écriture du professeur, calée sur les lignes du cahier. */
+@utility encre {
+  font-family: var(--font-ink);
+  color: var(--color-encre);
+  font-size: 21px;
+  line-height: 32px;
+}
+/* Tampon de statut du professeur. */
+@utility tampon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  border: 2.5px solid currentColor;
+  border-radius: 6px;
+  transform: rotate(-3deg);
+}
+
+/* Anciennes ombres de bloc : gardées (neutres) pour les composants non refondus. */
+@utility bloc-2 { box-shadow: none; }
+@utility bloc-3 { box-shadow: none; }
+@utility bloc-4 { box-shadow: none; }
+@utility bloc-5 { box-shadow: none; }
+@utility press {
+  transition: transform 80ms ease-out, background-color 150ms, filter 150ms;
+  &:active:not(:disabled) { transform: translateY(1px); }
+}
+
+:focus-visible { outline: 3px solid var(--color-primary-ink); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

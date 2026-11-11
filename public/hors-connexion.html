@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1e3f9e">
+  <title>Hors connexion · Parcours Scratch</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px; box-sizing: border-box;
+      background: #eef1f7; color: #141b33; font: 16px/1.5 system-ui, sans-serif; text-align: center; }
+    main { max-width: 340px; background: #fff; border-radius: 16px; padding: 28px 22px; box-shadow: 0 14px 32px -24px rgb(20 27 51 / .45); }
+    img { width: 72px; height: 72px; }
+    h1 { font-size: 22px; margin: 12px 0 6px; }
+    p { margin: 0 0 18px; color: #4f5874; }
+    button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 11px 18px; background: #1e3f9e; color: #fff; cursor: pointer; }
+    @media (prefers-color-scheme: dark) { body { background: #0d1222; color: #e8ecf7; } main { background: #161d33; } p { color: #a2abc6; } }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="/icons/icon-192.png" alt="">
+    <h1>Pas de connexion</h1>
+    <p>Parcours Scratch a besoin d’internet pour afficher tes défis. Vérifie ta connexion puis réessaie.</p>
+    <button type="button" onclick="location.reload()">Réessayer</button>
+  </main>
+</body>
+</html>

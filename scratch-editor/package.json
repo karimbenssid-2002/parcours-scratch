@@ -1,0 +1,8 @@
+{
+  "name": "parcours-scratch-editor",
+  "private": true,
+  "description": "Éditeur Scratch 3 officiel (AGPL-3.0), isolé du site : il embarque son propre React 18.",
+  "dependencies": {
+    "@scratch/scratch-gui": "15.2.0"
+  }
+}
