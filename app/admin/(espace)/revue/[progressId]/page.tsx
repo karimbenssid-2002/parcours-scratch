@@ -74,8 +74,8 @@ export default async function ReviewPage({ params, searchParams }: { params: Pro
       )}
 
       {/* En dessous de 1536 px, la décision passe sous l'éditeur : la scène Scratch reste entière. */}
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-4">
           <ReviewEditor progressId={progress.id} />
           {activity.statementYoutubeId && (
             <details className="glass p-4">

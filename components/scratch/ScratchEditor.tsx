@@ -111,7 +111,9 @@ export function ScratchEditor({ projectUrl, mode, onChangeState, onPhaseChange, 
     // Cadre blanc de carte : bordure de la boîte mesurée elle-même (pas de conteneur supplémentaire).
     <div ref={boxRef} className={`relative overflow-hidden rounded-2xl border-8 border-panel bg-white shadow-clay ${compact ? 'aspect-[4/3.45] w-full' : 'h-[75vh] min-h-[560px]'}`}>
       <iframe ref={iframeRef} src={`/scratch-editor/editor.html?mode=${mode}`} title="Éditeur Scratch"
-        className={frameStyle ? 'block' : 'block size-full'} style={frameStyle} />
+        // Réduite, l'iframe est sortie du flux : sa largeur agrandie ne doit pas élargir la boîte mesurée (sinon
+        // boucle : boîte plus large → iframe plus large → … quand le parent n'a pas de largeur fixée).
+        className={frameStyle ? 'absolute left-0 top-0 block' : 'block size-full'} style={frameStyle} />
       {phase !== 'ready' && (
         <div className="absolute inset-0 grid place-items-center bg-white/90" role="status">
           {phase === 'loading' ? (

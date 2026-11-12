@@ -74,6 +74,9 @@
           version++
           if (!changed) { changed = true; notify() }
         })
+        // Lecteur seul (élève après l'envoi, corrigé, téléphone) : la scène occupe tout le cadre, comme le bouton
+        // « plein écran » de Scratch, qui reste disponible pour revenir à la petite scène.
+        if (player) state.store.dispatch({ type: 'scratch-gui/mode/SET_FULL_SCREEN', isFullScreen: true })
         bridge.ready = true
         window.scratchBridge = bridge
         window.parent.postMessage({ type: 'scratch-ready' }, location.origin)
