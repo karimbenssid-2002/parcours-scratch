@@ -1,0 +1,11 @@
+{
+  "name": "parcours-scratch-runner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Service d'exécution des programmes Scratch (Cloud Run) : dépendances de l'image, versions fixées.",
+  "dependencies": {
+    "playwright-core": "1.63.0",
+    "server-only": "0.0.1",
+    "tsx": "4.23.15"
+  }
+}

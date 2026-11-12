@@ -1,19 +1,28 @@
 import { requireTeacher } from '@/lib/auth/session'
 import { getDb } from '@/lib/db/client'
-import { autogradeModel } from '@/lib/db/autograde'
+import { autogradeEffort, autogradeModel, quotaState } from '@/lib/db/autograde'
+import { now } from '@/lib/clock'
 import { monthlyUsage, type MonthlyUsage } from '@/lib/autograde/usage'
 import { isAiConfigured } from '@/lib/autograde/ai'
 import { autogradeEnabled } from '@/lib/autograde/enabled'
 import { Alert } from '@/components/ui/Alert'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { setModelAction } from './actions'
+import { CapForm, EffortForm } from './SettingsForms'
 
 export const metadata = { title: 'Correction automatique' }
 
 const MODELS = [
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', hint: 'Rapide et économique (recommandé pour commencer).' },
-  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', hint: 'Plus précis sur les programmes complexes, environ deux fois plus cher.' },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (rapide, recommandé)', hint: 'Rapide et très économique.' },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (plus précis, plus cher)', hint: 'Plus précis sur les programmes complexes, environ vingt fois plus cher.' },
 ] as const
+
+function formatDuration(ms: number): string {
+  const s = Math.round(ms / 1000)
+  if (s < 60) return `${s} s`
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
+  return h > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min ${String(s % 60).padStart(2, '0')} s`
+}
 
 const nf = new Intl.NumberFormat('fr-FR')
 const usd = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
@@ -53,6 +62,8 @@ export default async function AutogradeSettingsPage() {
   }
   const db = getDb()
   const model = await autogradeModel(db)
+  const effort = await autogradeEffort(db)
+  const runs = await quotaState(db, now())
   const current = await monthlyUsage(db, monthKey(0))
   const previous = await monthlyUsage(db, monthKey(-1))
   const hasKey = isAiConfigured()
@@ -74,8 +85,19 @@ export default async function AutogradeSettingsPage() {
         </fieldset>
         <SubmitButton pendingLabel="Enregistrement…">Enregistrer</SubmitButton>
       </form>
+      <EffortForm effort={effort} />
+      <CapForm cap={runs.cap} />
       <section aria-labelledby="conso" className="glass space-y-3 p-6">
         <h2 id="conso" className="text-xl font-semibold">Consommation</h2>
+        <div className="rounded-xl bg-surface p-4">
+          <h3 className="font-semibold">Exécutions du mois (service Cloud Run)</h3>
+          <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+            <dt>Exécutions utilisées / plafond</dt><dd className="text-right font-semibold">{nf.format(runs.used)} / {nf.format(runs.cap)}</dd>
+            <dt>Copies en file (pas encore exécutées)</dt><dd className="text-right font-semibold">{nf.format(runs.active)}</dd>
+            <dt>Durée totale d’exécution</dt><dd className="text-right font-semibold">{formatDuration(runs.durationMs)}</dd>
+          </dl>
+          {runs.remaining <= 0 && <p role="status" className="mt-2 text-sm font-semibold text-st-almost">Plafond atteint : les nouvelles corrections automatiques sont refusées jusqu’au mois prochain.</p>}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <UsageColumn title="Ce mois-ci" u={current} />
           <UsageColumn title="Mois précédent" u={previous} />

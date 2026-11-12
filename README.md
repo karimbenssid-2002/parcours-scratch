@@ -39,7 +39,9 @@ Toutes sont décrites dans [`.env.example`](.env.example).
 | `RESEND_API_KEY`, `EMAIL_FROM` | Envoi réel des e-mails via Resend (facultatif) |
 | `STORAGE_DIR` | Dossier des fichiers en local (`storage/` par défaut) |
 | `STORAGE_BACKEND`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET` | Stockage Supabase en ligne (bucket privé) |
-| `AUTOGRADE_ENABLED` | `1` active la correction automatique (Chromium et serveur permanent requis) |
+| `AUTOGRADE_ENABLED` | `1` active la correction automatique (Chromium local, ou le service d'exécution `AUTOGRADE_RUNNER_URL` : voir `runner-service/README.md`) ; la file est vidée par des fonctions lancées après la réponse (`after()`), sans boucle permanente |
+| `AUTOGRADE_RELAUNCH_SECRET` | Avec la correction automatique : secret du site (32 caractères minimum, distinct des autres) de la route `/api/correction/continuer`, par laquelle une fonction relance la suite de la file. Obligatoire sur Vercel (sinon la correction automatique reste désactivée). Chaque fonction prend des copies pendant 150 s puis relance la suite ; une copie qui dure plus de ~2 min 30 risque d'être coupée (reprise ensuite, au plus deux tentatives) |
+| `AUTOGRADE_SITE_URL` | Adresse du site (`https://…`, sans chemin) où envoyer la relance ; sur Vercel, le domaine de production par défaut. Jamais déduite de la requête en ligne |
 | `ANTHROPIC_API_KEY` | Propositions de note par l'IA pour la correction automatique (facultatif) |
 | `NEXT_PUBLIC_SOURCE_URL` | Adresse du dépôt public, pour le lien « Code source » du pied de page |
 | `EXPORT_SQLITE_FILE`, `EXPORT_STORAGE_DIR` | Source de `npm run export:contenu` (voir plus bas) |

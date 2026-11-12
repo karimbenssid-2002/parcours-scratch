@@ -1,7 +1,7 @@
 import type { AdminClaims, StudentClaims } from './jwt'
 
 const ADMIN_PUBLIC = ['/admin/login', '/admin/demande-compte']
-export const ADMIN_ONLY_PATHS = ['/admin/demandes', '/admin/enseignants', '/admin/eleves', '/admin/activites', '/admin/parcours']
+export const ADMIN_ONLY_PATHS = ['/admin/demandes', '/admin/enseignants', '/admin/eleves', '/admin/activites', '/admin/parcours', '/admin/correction']
 
 const STUDENT_PUBLIC = ['/connexion']
 

@@ -7,7 +7,8 @@ import { getAutogradeConfig, saveAutogradeSettings } from '@/lib/db/autograde'
 import { parseKeys } from '@/lib/autograde/keys'
 import { sameTraces, summarizeTraces } from '@/lib/autograde/compare'
 import { DEFAULT_ANSWERS, DEFAULT_KEYS } from '@/lib/autograde/runner/defaults'
-import { runMany } from '@/lib/autograde/runner/run'
+import { liveDeps } from '@/lib/autograde/deps'
+import { timedRun } from '@/lib/db/autograde-runs'
 import { readStored } from '@/lib/storage/files'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -42,7 +43,7 @@ export async function testAutogradeAction(activityId: string): Promise<{ error?:
   if (!bytes) return { error: 'Solution de référence introuvable.' }
   try {
     const base = { answers: config.answers.length ? config.answers : DEFAULT_ANSWERS, keys: config.keys.length ? config.keys : DEFAULT_KEYS, durationMs: config.durationMs }
-    const { traces } = await runMany(new Uint8Array(bytes), base)
+    const { traces } = await timedRun(getDb(), liveDeps(), 'test', null, new Uint8Array(bytes), base) // service distant en ligne (compté dans le plafond), Chromium en local
     const error = traces.find((t) => t.error)?.error
     if (error) return { error: `La solution n’a pas pu être exécutée : ${error}` }
     return { summary: summarizeTraces(traces), identical: sameTraces(traces, traces.map(() => traces[0])) }

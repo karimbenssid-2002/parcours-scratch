@@ -34,11 +34,13 @@ describe('préparation de la correction automatique', () => {
 
   it('modèle : Haiku par défaut, Sonnet si choisi, valeur inconnue ignorée', async () => {
     const db = await testDb()
-    expect(await autogradeModel(db)).toBe('claude-haiku-4-5')
+    expect(await autogradeModel(db)).toBe('claude-haiku-5-5')
     await setSetting(db, 'autograde_model', 'claude-sonnet-5-5')
     expect(await autogradeModel(db)).toBe('claude-sonnet-5-5')
     await setSetting(db, 'autograde_model', 'autre')
-    expect(await autogradeModel(db)).toBe('claude-haiku-4-5')
+    expect(await autogradeModel(db)).toBe('claude-haiku-5-5')
+    await setSetting(db, 'autograde_model', 'claude-haiku-4-5') // ancien réglage enregistré
+    expect(await autogradeModel(db)).toBe('claude-haiku-5-5')
   })
 })
 

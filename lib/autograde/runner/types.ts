@@ -13,3 +13,6 @@ export type RunTrace = {
   pen: { segments: number; bbox: [number, number, number, number] | null; hash: string }
 }
 export type RunResult = { project: unknown | null; traces: RunTrace[] } // project = JSON sb3 normalisé (aussi pour un .sb2)
+export type RunFn = (bytes: Uint8Array, base: Omit<RunOptions, 'seed'>, seeds?: number[]) => Promise<RunResult>
+/** Exécuteur et sa nature : seules les exécutions du service distant (Cloud Run) sont comptées ; « local » = Chromium. */
+export type RunnerDeps = { run: RunFn; runner: 'remote' | 'local' }

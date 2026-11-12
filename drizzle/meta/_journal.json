@@ -15,6 +15,13 @@
       "when": 1794424495944,
       "tag": "0001_sans_mot_de_passe",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794437355178,
+      "tag": "0002_past_smasher",
+      "breakpoints": true
     }
   ]
 }

@@ -3,12 +3,14 @@ import type { NextConfig } from 'next'
 /** Jamais dans le code serveur déployé : la base, les travaux des élèves, les fichiers de test/dev, et PGlite
  * (PostgreSQL en WebAssembly, local et tests uniquement), le code en ligne passant toujours par postgres-js. */
 const TRACE_EXCLUDES = ['./data/**/*', './storage/**/*', './test-results/**/*', './.next-e2e/**/*', './site breizh/**/*', './design-export/**/*', './design_handoff_scratch_glass/**/*', './docs/**/*', './node_modules/@electric-sql/pglite/**/*']
-/** Sans correction automatique (en ligne : AUTOGRADE_ENABLED absent au build), ni Chromium (playwright-core) ni l'éditeur
- * Scratch lu par le correcteur ne sont utiles côté serveur. L'éditeur reste servi comme fichier statique de public/ :
- * seul le traçage des fonctions serveur l'écarte. */
+/** Chromium (playwright-core) et l'éditeur Scratch lu par le correcteur ne servent côté serveur qu'à l'exécution locale :
+ * écartés sans correction automatique au build (AUTOGRADE_ENABLED absent), ou quand les programmes sont exécutés par le
+ * service distant (AUTOGRADE_RUNNER_URL défini au build, en ligne), et toujours sur Vercel (VERCEL défini au build) :
+ * aucune exécution n'y est possible. L'éditeur reste servi comme fichier statique de public/ : seul le traçage des
+ * fonctions serveur l'écarte. */
 const AUTOGRADE_TRACE_EXCLUDES = ['./public/scratch-editor/**/*', './node_modules/playwright-core/**/*']
-const autogradeAuBuild = process.env.AUTOGRADE_ENABLED === '1'
-const traceExcludes = [...TRACE_EXCLUDES, ...(autogradeAuBuild ? [] : AUTOGRADE_TRACE_EXCLUDES)]
+const chromiumLocalAuBuild = process.env.AUTOGRADE_ENABLED === '1' && !process.env.AUTOGRADE_RUNNER_URL && !process.env.VERCEL
+const traceExcludes = [...TRACE_EXCLUDES, ...(chromiumLocalAuBuild ? [] : AUTOGRADE_TRACE_EXCLUDES)]
 
 const nextConfig: NextConfig = {
   // Les tests e2e utilisent leur propre dossier de build : ils peuvent tourner pendant un `next dev` sur le port 3000.
@@ -20,9 +22,9 @@ const nextConfig: NextConfig = {
   // PGlite : laissé hors du bundle et chargé à la demande par lib/db/client.ts, puis écarté du code déployé.
   serverExternalPackages: ['@electric-sql/pglite'],
   outputFileTracingExcludes: { '/*': traceExcludes },
-  // Ces exclusions ne s'appliquent pas au traçage d'instrumentation.ts : il écarte lui-même la correction automatique
-  // grâce à cette constante, remplacée au build.
-  env: { AUTOGRADE_AU_BUILD: autogradeAuBuild ? '1' : '0' },
+  // Constante remplacée au build (« 1 » : Chromium local gardé ; « 0 » : écarté) : lib/autograde/enabled.ts refuse
+  // l'exécution locale quand Chromium n'est pas dans le code déployé.
+  env: { AUTOGRADE_AU_BUILD: chromiumLocalAuBuild ? '1' : '0' },
   async headers() {
     const cache = (value: string) => [{ key: 'Cache-Control', value }]
     return [

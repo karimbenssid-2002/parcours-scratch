@@ -6,7 +6,8 @@ import { getDb } from '@/lib/db/client'
 import { levelLabel } from '@/lib/levels'
 import { pendingByClass, reviewQueue } from '@/lib/review/service'
 import { ensureClosed } from '@/lib/deadlines/ensure'
-import { readyActivityIds } from '@/lib/db/autograde'
+import { quotaBlock, quotaState, readyActivityIds } from '@/lib/db/autograde'
+import { now } from '@/lib/clock'
 import { jobBadges, runStatus } from '@/lib/autograde/service'
 import { STATUS_LABELS } from '@/lib/progress/rules'
 import { ClassAutograde } from './ClassAutograde'
@@ -14,6 +15,8 @@ import { isAiConfigured } from '@/lib/autograde/ai'
 import { autogradeEnabled } from '@/lib/autograde/enabled'
 
 export const metadata = { title: 'À valider' }
+// Les actions de correction automatique de cette page vident la file après la réponse (after()) : jusqu'à 300 s.
+export const maxDuration = 300
 
 const plural = (n: number) => (n === 0 ? 'Aucun défi en attente' : `${n} défi${n > 1 ? 's' : ''} à valider`)
 
@@ -76,13 +79,16 @@ export default async function QueuePage({ searchParams }: { searchParams: Promis
   const eligible = queue.filter((q) => ready.has(q.activityId) && badges.get(q.progressId)?.kind !== 'running').length
   const skipped = queue.filter((q) => !ready.has(q.activityId)).length
   const run = await runStatus(db, teacher.id, cls.classId)
+  // Ce garde ne couvre que la requête du plafond (table des exécutions). La migration 0002 (colonne « attempts » lue
+  // par jobBadges, latestJob et pendingProposals) doit être appliquée en ligne AVANT de déployer ce code.
+  const quotaMessage = autogradeEnabled() ? quotaBlock(await quotaState(db, now()), eligible) : null
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <Link href="/admin/a-valider" className="inline-flex items-center gap-2 font-semibold text-primary-ink hover:underline">
         <ArrowLeft className="size-4" aria-hidden />Toutes les classes
       </Link>
       <h1 className="text-[34px] font-semibold leading-tight tracking-[-0.02em]">Défis à valider — {cls.name}</h1>
-      {autogradeEnabled() && <ClassAutograde classId={cls.classId} eligible={eligible} skipped={skipped} initialRun={run} aiConfigured={isAiConfigured()} />}
+      {autogradeEnabled() && <ClassAutograde classId={cls.classId} eligible={eligible} skipped={skipped} initialRun={run} aiConfigured={isAiConfigured()} quotaMessage={quotaMessage} />}
       {queue.length === 0 ? (
         <p className="glass p-6 text-muted">Aucun défi en attente dans cette classe.</p>
       ) : (

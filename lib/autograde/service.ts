@@ -1,32 +1,35 @@
-// Corrections automatiques : demandes (défi ou classe), exécution + tri, IA (directe ou par lot), application, reprise.
-// Tout l'état est en base : un redémarrage du serveur reprend là où il s'était arrêté.
-import { createHash } from 'node:crypto'
-import { and, asc, desc, eq, inArray, isNull, lt } from 'drizzle-orm'
+// Corrections automatiques : demandes (défi ou classe), exécution + tri, IA (appel direct), application.
+// Tout l'état est en base ; la file est vidée par lib/autograde/queue.ts (fonctions lancées après la réponse).
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { DB } from '@/lib/db/client'
 import { autogradeJobs, autogradeRuns, autogradeUsage, progress, ACTIVE_JOB_STATUSES, AUTOGRADE_JOB_STATUSES } from '@/lib/db/schema'
+import { referenceRun, timedRun } from '@/lib/db/autograde-runs'
 import { getStarterPath } from '@/lib/db/activities'
 import { getClassForTeacher, listClassMembers, studentClasses } from '@/lib/db/classes'
-import { autogradeModel, getAutogradeConfig, readyActivityIds } from '@/lib/db/autograde'
+import { autogradeEffort, autogradeModel, getAutogradeConfig, quotaBlock, quotaState, readyActivityIds } from '@/lib/db/autograde'
 import { decide, getReviewView, reviewQueue } from '@/lib/review/service'
 import { namesFromEmail } from '@/lib/auth/validation'
 import { readStored } from '@/lib/storage/files'
-import { parseAiAnswer, prepareRequest, type AiClient, type AiOutcome, type AiUsage, type PreparedRequest } from './ai'
+import { parseAiAnswer, prepareRequest, type AiClient, type AiOutcome, type AiUsage } from './ai'
 import { differences, summarizeTraces } from './compare'
 import { projectInventory, projectToText, type ProjectJson } from './project-text'
 import { DEFAULT_ANSWERS, DEFAULT_KEYS } from './runner/defaults'
-import type { RunOptions, RunResult } from './runner/types'
+import type { RunnerDeps } from './runner/types'
 import type { PersonNames } from './sanitize'
 import { triage, type Proposal } from './triage'
 
-export type Deps = {
-  run: (bytes: Uint8Array, base: Omit<RunOptions, 'seed'>, seeds?: number[]) => Promise<RunResult>
+export type Deps = RunnerDeps & {
   ai: () => AiClient | null
   now: () => Date
 }
 type Status = (typeof AUTOGRADE_JOB_STATUSES)[number]
 type Job = typeof autogradeJobs.$inferSelect
-type Run = typeof autogradeRuns.$inferSelect
 export type JobView = { id: string; status: Status; mode: 'propose' | 'send'; proposal: Proposal | null; error: string | null }
+
+/** Verrou de transaction (pg_advisory_xact_lock) pris pendant « vérifier le plafond puis enregistrer la demande » : deux demandes
+ * simultanées ne passent pas toutes les deux. Distinct de celui de la file (queue.ts) ; relâché à la fin de la transaction. */
+const QUOTA_LOCK = 7_320_402
+const lockQuota = (tx: Pick<DB, 'execute'>) => tx.execute(sql`select pg_advisory_xact_lock(${sql.raw(String(QUOTA_LOCK))})`)
 
 const ACTIVE: Status[] = [...ACTIVE_JOB_STATUSES]
 const NO_KEY = 'Correction automatique non configurée (clé d’API absente).'
@@ -38,9 +41,9 @@ async function setJob(db: DB, id: string, values: Partial<typeof autogradeJobs.$
 }
 const fail = (db: DB, deps: Deps, id: string, error: string) => setJob(db, id, { status: 'failed', error, finishedAt: deps.now().toISOString() })
 
-async function recordUsage(db: DB, jobId: string, model: string, usage: AiUsage | undefined, batch: boolean) {
+async function recordUsage(db: DB, jobId: string, model: string, usage: AiUsage | undefined) {
   if (!usage) return
-  await db.insert(autogradeUsage).values({ jobId, model, batch, ...usage })
+  await db.insert(autogradeUsage).values({ jobId, model, batch: false, ...usage }) // colonne `batch` gardée pour l'historique
 }
 
 async function activeJob(db: DB, progressId: string): Promise<Job | undefined> {
@@ -55,10 +58,15 @@ export async function requestCorrection(db: DB, deps: Deps, teacherId: string, p
   if (!v) return { ok: false, error: 'Défi introuvable.' }
   if (v.progress.status !== 'submitted' || !v.progress.submittedAt) return { ok: false, error: 'Ce défi n’est plus en attente de validation.' }
   if (!(await readyActivityIds(db)).has(v.progress.activityId)) return { ok: false, error: 'Activité non préparée pour la correction automatique.' }
-  // L'index unique partiel « autograde_jobs_one_active » tranche entre deux demandes simultanées : aucune ligne = déjà en cours.
-  const [job] = await db.insert(autogradeJobs).values({ progressId, teacherId, mode, submittedAt: v.progress.submittedAt, createdAt: deps.now().toISOString() })
-    .onConflictDoNothing().returning({ id: autogradeJobs.id })
-  return job ? { ok: true, jobId: job.id } : { ok: false, error: 'Une correction est déjà en cours.' }
+  return db.transaction(async (tx) => {
+    await lockQuota(tx)
+    const blocked = quotaBlock(await quotaState(tx, deps.now()), 1)
+    if (blocked) return { ok: false as const, error: blocked }
+    // L'index unique partiel « autograde_jobs_one_active » tranche entre deux demandes simultanées : aucune ligne = déjà en cours.
+    const [job] = await tx.insert(autogradeJobs).values({ progressId, teacherId, mode, submittedAt: v.progress.submittedAt!, createdAt: deps.now().toISOString() })
+      .onConflictDoNothing().returning({ id: autogradeJobs.id })
+    return job ? { ok: true as const, jobId: job.id } : { ok: false as const, error: 'Une correction est déjà en cours.' }
+  })
 }
 
 export async function requestClassCorrection(db: DB, deps: Deps, teacherId: string, classId: string, mode: 'propose' | 'send'): Promise<{ ok: true; runId: string | null; count: number; skipped: number } | { ok: false; error: string }> {
@@ -71,6 +79,10 @@ export async function requestClassCorrection(db: DB, deps: Deps, teacherId: stri
   if (eligible.length === 0) return { ok: true, runId: null, count: 0, skipped }
   const stamp = deps.now().toISOString()
   return db.transaction(async (tx) => {
+    // Une classe qui dépasserait le plafond est refusée en entier (les copies déjà en file, elles, finissent).
+    await lockQuota(tx)
+    const blocked = quotaBlock(await quotaState(tx, deps.now()), eligible.length)
+    if (blocked) return { ok: false as const, error: blocked }
     const [run] = await tx.insert(autogradeRuns).values({ classId, teacherId, mode, createdAt: stamp }).returning()
     let count = 0
     for (const q of eligible) {
@@ -108,10 +120,10 @@ async function finish(db: DB, deps: Deps, job: Job, proposal: Proposal): Promise
   await setJob(db, job.id, { status: r.ok ? 'applied' : 'stale', result, finishedAt: stamp })
 }
 
-async function applyOutcome(db: DB, deps: Deps, job: Job, outcome: AiOutcome, criteriaCount: number, model: string, batch: boolean) {
-  await recordUsage(db, job.id, model, outcome.usage, batch)
+async function applyOutcome(db: DB, deps: Deps, job: Job, outcome: AiOutcome, criteriaCount: number, model: string) {
+  await recordUsage(db, job.id, model, outcome.usage)
   if (!outcome.ok) return fail(db, deps, job.id, outcome.error)
-  // Revalidé avec le vrai nombre de critères (les résultats de lot sont lus sans le connaître).
+  // Revalidé avec le vrai nombre de critères.
   const proposal = parseAiAnswer(outcome.proposal, criteriaCount, outcome.proposal.model ?? model)
   if (!proposal) return fail(db, deps, job.id, 'Réponse de l’IA invalide.')
   await finish(db, deps, job, proposal)
@@ -132,26 +144,11 @@ async function personNames(db: DB, email: string, firstName: string, lastName: s
   return { firstNames: [...firstNames], lastNames: [...lastNames] }
 }
 
-// La solution et le projet de départ d'une activité donnent toujours le même résultat (graines fixes, temps simulé) :
-// on les exécute une fois, puis on les relit ici. La clé couvre le fichier et les réglages ; un cache par exécuteur.
-const RUN_CACHE_MAX = 50
-const runCaches = new WeakMap<Deps['run'], Map<string, Promise<RunResult>>>()
-
-function cachedRun(deps: Deps, bytes: Buffer, base: Omit<RunOptions, 'seed'>, seeds?: number[]): Promise<RunResult> {
-  let cache = runCaches.get(deps.run)
-  if (!cache) runCaches.set(deps.run, (cache = new Map()))
-  const key = `${createHash('sha256').update(bytes).digest('hex')}|${JSON.stringify(base)}|${seeds?.join(',') ?? ''}`
-  const hit = cache.get(key)
-  if (hit) return hit
-  const result = deps.run(new Uint8Array(bytes), base, seeds)
-  cache.set(key, result)
-  if (cache.size > RUN_CACHE_MAX) cache.delete(cache.keys().next().value!)
-  // Une exécution ratée (ou coupée) n'est pas gardée : elle sera retentée à la prochaine correction.
-  result.then((r) => { if (!r.project || r.traces.some((t) => t.error || t.cut)) cache.delete(key) }, () => cache.delete(key))
-  return result
-}
-
-async function handle(db: DB, deps: Deps, job: Job): Promise<void> {
+/**
+ * Corrige une copie déjà réclamée (« running »). Les échecs expliqués (activité non préparée, refus de l'IA…) sont
+ * enregistrés ici ; une exception est un échec technique, que la file retente (lib/autograde/queue.ts).
+ */
+export async function correctJob(db: DB, deps: Deps, job: Job): Promise<void> {
   const [p] = await db.select().from(progress).where(eq(progress.id, job.progressId)).limit(1)
   if (!p || p.status !== 'submitted' || p.submittedAt !== job.submittedAt) return setJob(db, job.id, { status: 'stale', finishedAt: deps.now().toISOString() })
   const config = await getAutogradeConfig(db, p.activityId)
@@ -164,11 +161,11 @@ async function handle(db: DB, deps: Deps, job: Job): Promise<void> {
   const base = { answers: config.answers.length ? config.answers : DEFAULT_ANSWERS, keys: config.keys.length ? config.keys : DEFAULT_KEYS, durationMs: config.durationMs }
   const starterPath = await getStarterPath(db, p.activityId)
   const starterBytes = starterPath ? await readStored(starterPath) : null
-  // Les trois exécutions sont indépendantes : en parallèle (solution et départ viennent en général du cache).
+  // Les trois exécutions sont indépendantes : en parallèle (solution et départ viennent en général de la base).
   const [student, solution, starterRun] = await Promise.all([
-    deps.run(new Uint8Array(studentBytes), base),
-    cachedRun(deps, solutionBytes, base),
-    starterBytes ? cachedRun(deps, starterBytes, base, [1]) : null,
+    timedRun(db, deps, 'eleve', job.id, new Uint8Array(studentBytes), base),
+    referenceRun(db, deps, solutionBytes, base, undefined, job.id),
+    starterBytes ? referenceRun(db, deps, starterBytes, base, [1], job.id) : null,
   ])
   if (!solution.project || solution.traces.some((t) => t.error)) return fail(db, deps, job.id, 'La solution de référence n’a pas pu être exécutée.')
   const starter = starterRun ? (starterRun.project as ProjectJson | null) : null
@@ -199,96 +196,17 @@ async function handle(db: DB, deps: Deps, job: Job): Promise<void> {
   if (!client) return fail(db, deps, job.id, NO_KEY)
   // Les exécutions prennent du temps : l'élève a pu reprendre son défi entre-temps.
   if (!(await stillSubmitted(db, job))) return setJob(db, job.id, { status: 'stale', finishedAt: deps.now().toISOString() })
-  if (job.runId) return setJob(db, job.id, { status: 'waiting_ai', prepared: JSON.stringify(req) })
   const model = await autogradeModel(db)
-  await applyOutcome(db, deps, job, await client.grade(model, req), config.criteria.length, model, false)
+  const effort = await autogradeEffort(db)
+  await applyOutcome(db, deps, job, await client.grade(model, req, effort), config.criteria.length, model)
 }
 
-/** Exécute et trie les corrections en file (3 au plus par appel). */
-export async function processQueued(db: DB, deps: Deps): Promise<number> {
-  const jobs = await db.select().from(autogradeJobs).where(eq(autogradeJobs.status, 'queued')).orderBy(asc(autogradeJobs.createdAt)).limit(3)
-  let handled = 0
-  for (const job of jobs) {
-    const claimed = (await db.update(autogradeJobs).set({ status: 'running', startedAt: deps.now().toISOString() })
-      .where(and(eq(autogradeJobs.id, job.id), eq(autogradeJobs.status, 'queued'))).returning({ id: autogradeJobs.id })).length === 1
-    if (!claimed) continue
-    try {
-      await handle(db, deps, { ...job, status: 'running' })
-    } catch {
-      await fail(db, deps, job.id, 'Erreur pendant la correction.')
-    }
-    handled++
-  }
-  return handled
-}
-
-async function criteriaCountFor(db: DB, job: Job): Promise<number> {
-  const [p] = await db.select({ activityId: progress.activityId }).from(progress).where(eq(progress.id, job.progressId)).limit(1)
-  return p ? ((await getAutogradeConfig(db, p.activityId))?.criteria.length ?? -1) : -1
-}
-
-/** Corrections de classe : envoie les lots prêts, interroge les lots en attente, applique les résultats. */
-export async function processRuns(db: DB, deps: Deps): Promise<void> {
-  const runs = await db.select().from(autogradeRuns).where(isNull(autogradeRuns.finishedAt))
-  for (const run of runs) {
-    // Une erreur de l'IA sur un lot (lot expiré, clé révoquée…) ne doit pas bloquer les autres classes.
-    try {
-      await processRun(db, deps, run)
-    } catch (e) {
-      const error = `IA indisponible : ${e instanceof Error ? e.message : 'erreur inconnue'}.`
-      const active = await db.select().from(autogradeJobs).where(and(eq(autogradeJobs.runId, run.id), inArray(autogradeJobs.status, ACTIVE)))
-      for (const j of active) await fail(db, deps, j.id, error)
-      await db.update(autogradeRuns).set({ finishedAt: deps.now().toISOString() }).where(eq(autogradeRuns.id, run.id))
-    }
-  }
-}
-
-async function processRun(db: DB, deps: Deps, run: Run): Promise<void> {
-  const jobs = await db.select().from(autogradeJobs).where(eq(autogradeJobs.runId, run.id))
-  if (jobs.some((j) => j.status === 'queued' || j.status === 'running')) return
-  // Travaux repris par l'élève depuis l'exécution : ni envoyés à l'IA, ni corrigés.
-  for (const j of jobs.filter((j) => j.status === 'waiting_ai'))
-    if (!(await stillSubmitted(db, j))) await setJob(db, j.id, { status: 'stale', finishedAt: deps.now().toISOString() })
-  const waiting = await db.select().from(autogradeJobs).where(and(eq(autogradeJobs.runId, run.id), eq(autogradeJobs.status, 'waiting_ai')))
-  if (waiting.length) {
-    const client = deps.ai()
-    if (!client) for (const j of waiting) await fail(db, deps, j.id, NO_KEY)
-    else await sendOrCollect(db, deps, run, client, waiting)
-  }
+/** Une correction de classe est terminée quand plus aucune de ses copies n'est active. */
+export async function closeRunIfDone(db: DB, deps: Deps, runId: string | null): Promise<void> {
+  if (!runId) return
   const still = await db.select({ id: autogradeJobs.id }).from(autogradeJobs)
-    .where(and(eq(autogradeJobs.runId, run.id), inArray(autogradeJobs.status, ACTIVE))).limit(1)
-  if (still.length === 0) await db.update(autogradeRuns).set({ finishedAt: deps.now().toISOString() }).where(eq(autogradeRuns.id, run.id))
-}
-
-/** Un seul travail : appel direct. Plusieurs : un lot (moitié prix), envoyé puis interrogé aux passages suivants. */
-async function sendOrCollect(db: DB, deps: Deps, run: Run, client: AiClient, waiting: Job[]): Promise<void> {
-  const model = await autogradeModel(db)
-  if (!run.batchId && waiting.length === 1) {
-    const job = waiting[0]
-    return applyOutcome(db, deps, job, await client.grade(model, JSON.parse(job.prepared!) as PreparedRequest), await criteriaCountFor(db, job), model, false)
-  }
-  if (!run.batchId) {
-    const batchId = await client.submitBatch(model, waiting.map((j) => ({ customId: j.id, req: JSON.parse(j.prepared!) as PreparedRequest })))
-    await db.update(autogradeRuns).set({ batchId }).where(eq(autogradeRuns.id, run.id))
-    return
-  }
-  const results = await client.batchResults(run.batchId)
-  if (!results) return
-  for (const job of waiting) {
-    const outcome = results.get(job.id)
-    if (!outcome) await fail(db, deps, job.id, 'Résultat absent du lot de l’IA.')
-    else await applyOutcome(db, deps, job, outcome, await criteriaCountFor(db, job), model, true)
-  }
-}
-
-/**
- * Exécutions interrompues → de nouveau en file. Au démarrage du serveur (un seul processus), toutes ;
- * en marche, seulement celles bloquées depuis plus de 5 minutes.
- */
-export async function recoverJobs(db: DB, deps: Deps, options: { startup?: boolean } = {}): Promise<void> {
-  const limit = new Date(deps.now().getTime() - 5 * 60_000).toISOString()
-  await db.update(autogradeJobs).set({ status: 'queued', startedAt: null })
-    .where(options.startup ? eq(autogradeJobs.status, 'running') : and(eq(autogradeJobs.status, 'running'), lt(autogradeJobs.startedAt, limit)))
+    .where(and(eq(autogradeJobs.runId, runId), inArray(autogradeJobs.status, ACTIVE))).limit(1)
+  if (still.length === 0) await db.update(autogradeRuns).set({ finishedAt: deps.now().toISOString() }).where(and(eq(autogradeRuns.id, runId), isNull(autogradeRuns.finishedAt)))
 }
 
 // ---------------------------------------------------------------- lectures
@@ -306,7 +224,7 @@ export async function runStatus(db: DB, teacherId: string, classId: string): Pro
   if (!run) return null
   const jobs = await db.select({ status: autogradeJobs.status }).from(autogradeJobs).where(eq(autogradeJobs.runId, run.id))
   return {
-    runId: run.id, mode: run.mode, total: jobs.length, finished: run.finishedAt !== null,
+    runId: run.id, mode: run.mode, total: jobs.length, finished: run.finishedAt !== null || (jobs.length > 0 && jobs.every((j) => !ACTIVE.includes(j.status))),
     done: jobs.filter((j) => j.status === 'done' || j.status === 'applied').length,
     failed: jobs.filter((j) => j.status === 'failed' || j.status === 'stale').length,
   }

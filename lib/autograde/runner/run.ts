@@ -14,8 +14,15 @@ const TIMED_OUT = Symbol('timeout')
 
 const empty = (error: string): RunTrace => ({ finished: false, timedOut: false, error, says: [], questions: [], variables: {}, lists: {}, sprites: [], costumeChanges: [], sounds: [], pen: { segments: 0, bbox: null, hash: '' } })
 
-async function execute(bytes: Uint8Array, options: RunOptions[], wantProject: boolean): Promise<RunResult> {
+export type RunControl = { signal?: AbortSignal }
+
+async function execute(bytes: Uint8Array, options: RunOptions[], wantProject: boolean, signal?: AbortSignal): Promise<RunResult> {
   const page = await openRunnerPage()
+  // Arrêt demandé de l'extérieur (échéance globale du service, client parti) : traité comme la limite en temps réel.
+  const aborted = new Promise<typeof TIMED_OUT>((resolve) => {
+    if (signal?.aborted) resolve(TIMED_OUT)
+    else signal?.addEventListener('abort', () => resolve(TIMED_OUT), { once: true })
+  })
   try {
     const base64 = Buffer.from(bytes).toString('base64')
     const traces: RunTrace[] = []
@@ -25,7 +32,7 @@ async function execute(bytes: Uint8Array, options: RunOptions[], wantProject: bo
       // le serveur : passé la limite, le contexte du navigateur est fermé et les exécutions restantes sont notées coupées.
       let timer: NodeJS.Timeout | undefined
       const deadline = new Promise<typeof TIMED_OUT>((resolve) => { timer = setTimeout(() => resolve(TIMED_OUT), realLimitMs(opt.durationMs)) })
-      const outcome = await Promise.race([runOnce(opt), deadline]).finally(() => clearTimeout(timer))
+      const outcome = signal?.aborted ? TIMED_OUT : await Promise.race([runOnce(opt), deadline, aborted]).finally(() => clearTimeout(timer))
       if (outcome === TIMED_OUT) {
         await page.context().close().catch(() => {})
         const cut: RunTrace = { ...empty(''), error: null, timedOut: true, cut: true }
@@ -71,6 +78,7 @@ export async function runProject(bytes: Uint8Array, options: RunOptions): Promis
   return (await execute(bytes, [options], false)).traces[0]
 }
 
-export async function runMany(bytes: Uint8Array, base: Omit<RunOptions, 'seed'>, seeds = [1, 2, 3, 4, 5]): Promise<RunResult> {
-  return execute(bytes, seeds.map((seed) => ({ ...base, seed })), true)
+/** Exécutions avec les graines données ; `control.signal` coupe les exécutions restantes (traces « cut »). */
+export async function runMany(bytes: Uint8Array, base: Omit<RunOptions, 'seed'>, seeds = [1, 2, 3, 4, 5], control: RunControl = {}): Promise<RunResult> {
+  return execute(bytes, seeds.map((seed) => ({ ...base, seed })), true, control.signal)
 }

@@ -4,17 +4,15 @@ import { z } from 'zod'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { sanitizeForAi, type PersonNames } from './sanitize'
 import type { Proposal } from './triage'
-import type { AutogradeModel } from '@/lib/db/autograde'
+import { toEffort, type AutogradeEffort, type AutogradeModel } from '@/lib/db/autograde'
 import { autogradeEnabled } from './enabled'
 
 export type AiInput = { instructions: string; criteria: string[]; solutionText: string; solutionSummary: string; studentText: string; studentSummary: string; differences: string[] }
 export type PreparedRequest = { system: string; fixed: string; variable: string }
 export type AiUsage = { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number }
-export type AiOutcome = { ok: true; proposal: Proposal; usage: AiUsage } | { ok: false; error: string; usage?: AiUsage }
+export type AiOutcome = { ok: true; proposal: Proposal; usage: AiUsage } | { ok: false; error: string; usage?: AiUsage; retryable?: boolean }
 export interface AiClient {
-  grade(model: AutogradeModel, req: PreparedRequest): Promise<AiOutcome>
-  submitBatch(model: AutogradeModel, items: { customId: string; req: PreparedRequest }[]): Promise<string>
-  batchResults(batchId: string): Promise<null | Map<string, AiOutcome>>
+  grade(model: AutogradeModel, req: PreparedRequest, effort?: AutogradeEffort): Promise<AiOutcome>
 }
 
 const SYSTEM = [
@@ -67,15 +65,15 @@ export function parseAiAnswer(raw: unknown, criteriaCount: number, model: string
   return { decision: r.data.decision, comment: r.data.comment.trim(), criteria: r.data.criteria, source: 'ai', model }
 }
 
-function params(model: AutogradeModel, req: PreparedRequest) {
+function params(model: AutogradeModel, req: PreparedRequest, effort: AutogradeEffort) {
   return {
-    model, max_tokens: 1000,
+    model, max_tokens: 16000, // les jetons de réflexion comptent dans ce plafond
     system: [{ type: 'text' as const, text: req.system }],
     messages: [{ role: 'user' as const, content: [
       { type: 'text' as const, text: req.fixed, cache_control: { type: 'ephemeral' as const } }, // partie fixe en cache (même défi)
       { type: 'text' as const, text: req.variable },
     ] }],
-    output_config: { format: zodOutputFormat(Answer), ...(model === 'claude-sonnet-5-5' ? { effort: 'low' as const } : {}) },
+    output_config: { format: zodOutputFormat(Answer), effort }, // réflexion adaptative ; niveau choisi par l'administrateur (« low » par défaut)
   }
 }
 
@@ -84,63 +82,49 @@ const usageOf = (u: Anthropic.Usage): AiUsage => ({ inputTokens: u.input_tokens,
 function outcomeOf(message: Anthropic.Message, criteriaCount: number, model: string): AiOutcome {
   const usage = usageOf(message.usage)
   if (message.stop_reason === 'refusal') return { ok: false, error: 'L’IA a refusé de corriger ce défi.', usage }
+  if (message.stop_reason === 'max_tokens') return { ok: false, error: 'Réponse de l’IA incomplète.', usage }
   const text = message.content.find((b) => b.type === 'text')?.text ?? ''
   let raw: unknown = null
   try { raw = JSON.parse(text) } catch { /* réponse invalide */ }
   const proposal = parseAiAnswer(raw, criteriaCount, model)
-  return proposal ? { ok: true, proposal, usage } : { ok: false, error: 'Réponse de l’IA invalide.', usage }
+  return proposal ? { ok: true, proposal, usage } : { ok: false, error: 'Réponse de l’IA invalide.', usage, retryable: true }
 }
+
+const addUsage = (a: AiUsage | undefined, b: AiUsage | undefined): AiUsage | undefined => !a || !b ? (a ?? b) : ({
+  inputTokens: a.inputTokens + b.inputTokens, cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
+  cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens, outputTokens: a.outputTokens + b.outputTokens,
+})
 
 const criteriaCount = (req: PreparedRequest) => (req.fixed.match(/^\d+\. /gm) ?? []).length
 
-export function anthropicClient(): AiClient | null {
-  if (!process.env.ANTHROPIC_API_KEY) return null
-  const client = new Anthropic({ maxRetries: 1 }) // une nouvelle tentative en cas d'erreur réseau / 5xx (spec §5.3)
+export function anthropicClient(sdk?: Pick<Anthropic, 'messages'>): AiClient | null {
+  if (!sdk && !process.env.ANTHROPIC_API_KEY) return null
+  const client = sdk ?? new Anthropic({ maxRetries: 1 }) // une nouvelle tentative en cas d'erreur réseau / 5xx (spec §5.3)
   return {
-    async grade(model, req) {
+    async grade(model, req, effortRequested) {
+      const effort = toEffort(effortRequested)
+      let first: AiOutcome | null = null
       try {
-        let outcome = outcomeOf(await client.messages.create(params(model, req)), criteriaCount(req), model)
-        if (!outcome.ok) outcome = outcomeOf(await client.messages.create(params(model, req)), criteriaCount(req), model) // une nouvelle tentative
-        return outcome
+        first = outcomeOf(await client.messages.create(params(model, req, effort)), criteriaCount(req), model)
+        // Une seule nouvelle tentative, et seulement pour une réponse illisible (pas pour un refus ni une réponse tronquée).
+        if (first.ok || !first.retryable) return first
+        const second = outcomeOf(await client.messages.create(params(model, req, effort)), criteriaCount(req), model)
+        return { ...second, usage: addUsage(first.usage, second.usage) } as AiOutcome // les deux appels sont facturés
       } catch (e) {
-        return { ok: false, error: e instanceof Anthropic.APIError ? `IA indisponible (${e.status ?? 'réseau'}).` : 'IA indisponible.' }
+        return { ok: false, error: e instanceof Anthropic.APIError ? `IA indisponible (${e.status ?? 'réseau'}).` : 'IA indisponible.', ...(first?.usage ? { usage: first.usage } : {}) }
       }
-    },
-    async submitBatch(model, items) {
-      const batch = await client.messages.batches.create({ requests: items.map((i) => ({ custom_id: i.customId, params: params(model, i.req) })) })
-      return batch.id
-    },
-    async batchResults(batchId) {
-      const batch = await client.messages.batches.retrieve(batchId)
-      if (batch.processing_status !== 'ended') return null
-      const out = new Map<string, AiOutcome>()
-      for await (const r of await client.messages.batches.results(batchId)) {
-        // Le nombre de critères n'est pas connu ici : on le relit dans la réponse (validé ensuite par le service).
-        if (r.result.type === 'succeeded') out.set(r.custom_id, outcomeOf(r.result.message, -1, r.result.message.model))
-        else out.set(r.custom_id, { ok: false, error: `Lot IA : ${r.result.type}.` })
-      }
-      return out
     },
   }
 }
 
 export function fakeClient(): AiClient {
-  const store = globalThis as unknown as { __fakeBatches?: Map<string, Map<string, AiOutcome>> }
-  store.__fakeBatches ??= new Map()
-  const grade = async (model: AutogradeModel, req: PreparedRequest): Promise<AiOutcome> => {
-    const same = req.variable.includes('# Différences constatées avec la solution\naucune')
-    const n = criteriaCount(req)
-    return { ok: true, usage: { inputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 20 },
-      proposal: { decision: same ? 'validated' : 'almost', comment: same ? 'Bravo, c’est réussi !' : 'C’est presque ça : vérifie la fin de ton programme.', criteria: Array.from({ length: n }, (_, i) => ({ index: i + 1, met: same, reason: same ? 'Conforme.' : 'À vérifier.' })), source: 'ai', model } }
-  }
   return {
-    grade,
-    async submitBatch(model, items) {
-      const id = `fake-${crypto.randomUUID()}`
-      store.__fakeBatches!.set(id, new Map(await Promise.all(items.map(async (i) => [i.customId, await grade(model, i.req)] as const))))
-      return id
+    async grade(model, req) {
+      const same = req.variable.includes('# Différences constatées avec la solution\naucune')
+      const n = criteriaCount(req)
+      return { ok: true, usage: { inputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 20 },
+        proposal: { decision: same ? 'validated' : 'almost', comment: same ? 'Bravo, c’est réussi !' : 'C’est presque ça : vérifie la fin de ton programme.', criteria: Array.from({ length: n }, (_, i) => ({ index: i + 1, met: same, reason: same ? 'Conforme.' : 'À vérifier.' })), source: 'ai', model } }
     },
-    async batchResults(id) { return store.__fakeBatches!.get(id) ?? null },
   }
 }
 

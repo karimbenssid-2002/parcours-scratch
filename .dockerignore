@@ -1,0 +1,17 @@
+# Contexte de construction de l'image du service d'exécution (runner-service/Dockerfile, construite depuis la racine) :
+# liste fermée. Rien d'autre n'entre dans l'image (ni node_modules, ni data/, storage/, .env*, docs/, .superpowers/…).
+*
+!runner-service/package.json
+!runner-service/package-lock.json
+!runner-service/server.ts
+!runner-service/handler.ts
+!runner-service/http.ts
+!lib/http/body.ts
+!lib/autograde/runner/*.ts
+# Éditeur Scratch construit (npm run editor:install), sans ce que la page d'exécution ne charge jamais :
+# static/ (images de la bibliothèque, 70 Mo) sauf ses scripts, la page de l'éditeur, les cartes de code source.
+!public/scratch-editor/**
+public/scratch-editor/static/**
+!public/scratch-editor/static/assets/*.js
+public/scratch-editor/editor.html
+**/*.map

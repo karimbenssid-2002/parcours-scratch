@@ -28,6 +28,8 @@ describe('decide — espace admin', () => {
     expect(decide('/admin/demandes', prof, null)).toEqual({ redirect: '/admin' })
     expect(decide('/admin/enseignants', prof, null)).toEqual({ redirect: '/admin' })
     expect(decide('/admin/demandes', admin, null)).toBeNull()
+    expect(decide('/admin/correction', prof, null)).toEqual({ redirect: '/admin' })
+    expect(decide('/admin/correction', admin, null)).toBeNull()
   })
 })
 
@@ -72,5 +74,17 @@ describe('decide — règles de confidentialité', () => {
     expect(decide('/confidentialite', null, null)).toBeNull()
     expect(decide('/confidentialite', null, { studentId: 's1' })).toBeNull()
     expect(decide('/confidentialite', { teacherId: 't1', username: 'prof.exemple', role: 'prof' }, null)).toBeNull()
+  })
+})
+
+describe('decide — routes API', () => {
+  it('la relance de la file de corrections passe sans session (elle se protège par son secret)', () => {
+    expect(decide('/api/correction/continuer', null, null)).toBeNull()
+    expect(decide('/api/cron/veille', null, null)).toBeNull()
+  })
+  it('le proxy ne s’applique pas aux routes API', async () => {
+    const { config } = await import('../proxy')
+    expect(new RegExp(`^${config.matcher[0]}$`).test('/api/correction/continuer')).toBe(false)
+    expect(new RegExp(`^${config.matcher[0]}$`).test('/admin')).toBe(true)
   })
 })

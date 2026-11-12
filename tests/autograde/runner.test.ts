@@ -67,6 +67,25 @@ describe('exécuteur', { timeout: 120_000 }, () => {
     expect(t.sounds.map((s) => s.sound)).toEqual(['Meow'])
   })
 
+  it('arrêt demandé (signal) : exécutions restantes coupées, réponse sans attendre', async () => {
+    const forever = makeSb3([[['event_whenflagclicked'], ['control_forever', {}, [['motion_turnright', { DEGREES: 1 }]]]]])
+    const start = Date.now()
+    const r = await runMany(forever, { answers: [], keys: [], durationMs: 60_000 }, [1, 2, 3, 4, 5], { signal: AbortSignal.timeout(1_500) })
+    expect(r.traces).toHaveLength(5)
+    expect(r.traces.at(-1)).toMatchObject({ cut: true, timedOut: true })
+    expect(Date.now() - start).toBeLessThan(20_000)
+    // Déjà arrêté avant de commencer : tout est coupé.
+    const done = await runMany(forever, { answers: [], keys: [], durationMs: 3000 }, [1, 2], { signal: AbortSignal.abort() })
+    expect(done.traces.map((t) => t.cut)).toEqual([true, true])
+  })
+
+  it('stylo remis à zéro à chaque exécution : 6 segments aux 5 exécutions (pas 6, 12, 18…)', async () => {
+    const hexagon = makeSb3([[['event_whenflagclicked'], ['pen_penDown'], ['control_repeat', { TIMES: 6 }, [['motion_movesteps', { STEPS: 40 }], ['motion_turnright', { DEGREES: 60 }]]]]])
+    const r = await runMany(hexagon, { answers: [], keys: [], durationMs: 3000 })
+    expect(r.traces.map((t) => t.pen.segments)).toEqual([6, 6, 6, 6, 6])
+    expect(new Set(r.traces.map((t) => t.pen.hash)).size).toBe(1)
+  })
+
   it('5 exécutions identiques pour un programme fixe ; JSON normalisé renvoyé ; .sb2 accepté', async () => {
     const r = await runMany(sayHello(), { answers: [], keys: [], durationMs: 2000 })
     expect(r.traces).toHaveLength(5)

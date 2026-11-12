@@ -6,13 +6,29 @@ import type { Browser, Page } from 'playwright-core'
 const ORIGIN = 'http://runner.local'
 const ROOT = path.join(process.cwd(), 'public', 'scratch-editor')
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.hex': 'application/octet-stream' }
-const store = globalThis as unknown as { __autogradeBrowser?: Promise<Browser>; __autogradeSpare?: Promise<Page> }
+const store = globalThis as unknown as { __autogradeBrowser?: Promise<Browser>; __autogradeSpare?: Promise<Page>; __autogradeMinimalEnv?: boolean }
+
+/** Variables d'environnement utiles à Chromium (Linux du conteneur, et Windows pour un essai local du service). */
+const BROWSER_ENV = new Set(['PATH', 'HOME', 'LANG', 'LANGUAGE', 'LC_ALL', 'TZ', 'TMPDIR', 'XDG_RUNTIME_DIR', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME',
+  'FONTCONFIG_PATH', 'FONTCONFIG_FILE', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'PROGRAMDATA',
+  'PROGRAMFILES', 'PROGRAMFILES(X86)', 'COMSPEC', 'PATHEXT', 'NUMBER_OF_PROCESSORS', 'OS', 'PROCESSOR_ARCHITECTURE'])
+
+/** Environnement réduit à BROWSER_ENV : aucun secret (clés, secret du service, adresse de la base) pour Chromium. */
+export function minimalBrowserEnv(source: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  return Object.fromEntries(Object.entries(source).filter((e): e is [string, string] => e[1] !== undefined && BROWSER_ENV.has(e[0].toUpperCase())))
+}
+
+/** Service d'exécution : Chromium, qui exécute des projets non fiables sans bac à sable, ne voit que minimalBrowserEnv. */
+export function enableMinimalBrowserEnv(): void {
+  store.__autogradeMinimalEnv = true
+}
 
 /* playwright-core n'est chargé qu'au premier lancement de Chromium : construit sans correction automatique (en ligne),
  * il est écarté des fichiers déployés (next.config.ts), et un import statique ferait échouer le chargement des pages
  * qui importent ce module (actions de revue et d'activité) avant même tout appel. */
 function browser(): Promise<Browser> {
-  store.__autogradeBrowser ??= import('playwright-core').then(({ chromium }) => chromium.launch({ headless: true })).then((b) => {
+  store.__autogradeBrowser ??= import('playwright-core').then(({ chromium }) =>
+    chromium.launch({ headless: true, ...(store.__autogradeMinimalEnv ? { env: minimalBrowserEnv() } : {}) })).then((b) => {
     b.on('disconnected', () => { store.__autogradeBrowser = undefined }) // relancé au prochain besoin s'il plante
     return b
   })
@@ -45,6 +61,7 @@ export async function openRunnerPage(): Promise<Page> {
 /** Page d'exécution : seuls les fichiers de public/scratch-editor sont servis, tout le reste est bloqué (pas de réseau). */
 async function openFreshPage(): Promise<Page> {
   const context = await (await browser()).newContext({ viewport: { width: 480, height: 360 } })
+  await context.routeWebSocket(() => true, (ws) => ws.close()) // WebSockets non plus : aucune connexion vers l'extérieur
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url())
     if (url.origin !== ORIGIN) return route.abort()

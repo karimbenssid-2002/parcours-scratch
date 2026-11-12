@@ -2,9 +2,10 @@ import { like } from 'drizzle-orm'
 import type { DB } from '@/lib/db/client'
 import { autogradeJobs, autogradeUsage } from '@/lib/db/schema'
 
-// Tarifs publics en dollars par million de tokens (entrée, sortie, lecture du cache, écriture du cache) ; un lot coûte moitié prix.
+// Tarifs publics en dollars par million de tokens (entrée, sortie, lecture du cache, écriture du cache) ; les anciennes lignes de lot (historique) comptent moitié prix.
 const PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
-  'claude-haiku-4-5': { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  'claude-haiku-4-5': { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 }, // historique
   'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
 }
 

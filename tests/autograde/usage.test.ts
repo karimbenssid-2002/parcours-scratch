@@ -24,12 +24,18 @@ describe('consommation de la correction automatique', () => {
     const j3 = await job('ai', '2026-10-04T10:00:00.000Z')
     await job('ai', '2026-09-30T10:00:00.000Z') // autre mois
     await db.insert(autogradeUsage).values([
-      { jobId: j2.id, model: 'claude-haiku-4-5', inputTokens: 1000, outputTokens: 200, batch: false, createdAt: '2026-10-03T10:00:00.000Z' },
-      { jobId: j3.id, model: 'claude-haiku-4-5', inputTokens: 1000, outputTokens: 200, batch: true, createdAt: '2026-10-04T10:00:00.000Z' },
+      { jobId: j2.id, model: 'claude-haiku-5-5', inputTokens: 1000, outputTokens: 200, batch: false, createdAt: '2026-10-03T10:00:00.000Z' },
+      { jobId: j3.id, model: 'claude-haiku-5-5', inputTokens: 1000, outputTokens: 200, batch: true, createdAt: '2026-10-04T10:00:00.000Z' },
     ])
     const usage = await monthlyUsage(db, '2026-10')
     expect(usage).toMatchObject({ corrections: 3, withoutAi: 1, aiCalls: 2, inputTokens: 2000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 400 })
-    expect(usage.costUsd).toBeCloseTo(((1000 * 1 + 200 * 5) / 1e6) * 1.5, 10)
+    expect(usage.costUsd).toBeCloseTo(((1000 * 0.1 + 200 * 0.5) / 1e6) * 1.5, 10)
+  })
+
+  it('applique les tarifs de Haiku 5.5 et du cache', async () => {
+    const db = await testDb()
+    await db.insert(autogradeUsage).values({ model: 'claude-haiku-5-5', inputTokens: 1000, cacheReadTokens: 2000, cacheWriteTokens: 1000, outputTokens: 100, batch: false, createdAt: '2026-10-05T00:00:00.000Z' })
+    expect((await monthlyUsage(db, '2026-10')).costUsd).toBeCloseTo((1000 * 0.1 + 2000 * 0.01 + 1000 * 0.125 + 100 * 0.5) / 1e6, 10)
   })
 
   it('applique les tarifs de Sonnet 5.5 et du cache', async () => {

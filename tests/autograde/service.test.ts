@@ -11,21 +11,28 @@ import { addEmailsToClass, createClass } from '@/lib/db/classes'
 import { createActivity, setActivityStatus } from '@/lib/db/activities'
 import { addAssignments } from '@/lib/db/assignments'
 import { getProgress, recordSave, submitProgress } from '@/lib/db/progress'
-import { activityAutograde, autogradeJobs, progress, reviews } from '@/lib/db/schema'
+import { activityAutograde, autogradeJobs, autogradeRunnerCalls, progress, reviews } from '@/lib/db/schema'
 import { saveAutogradeSettings, setSolution } from '@/lib/db/autograde'
 import { writeStored } from '@/lib/storage/files'
 import { fakeClient, type AiClient, type PreparedRequest } from '@/lib/autograde/ai'
 import type { RunResult, RunTrace } from '@/lib/autograde/runner/types'
 import {
-  latestJob, markApplied, processQueued, processRuns, recoverJobs, requestClassCorrection, requestCorrection, runStatus, type Deps,
+  latestJob, markApplied, requestClassCorrection, requestCorrection, runStatus, type Deps,
 } from '@/lib/autograde/service'
+import { drainQueue, recoverStuck } from '@/lib/autograde/queue'
 import { makeSb3 } from './fixtures'
 
 beforeEach(() => {
   process.env.STORAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'autograde-'))
 })
 
+/** Vide la file dans la fonction en cours (échéance lointaine, aucune relance). */
+const processQueued = (db: Parameters<typeof drainQueue>[0], deps: Deps) => drainQueue(db, deps, { deadline: Date.now() + 60_000, relaunch: async () => true })
+
 const say = (text: string) => makeSb3([[['event_whenflagclicked'], ['looks_say', { MESSAGE: text }]]])
+
+/** La solution (seule à dire exactement « Bonjour » ici) : reconnue par son texte, ses octets changeant d'un appel de makeSb3 à l'autre. */
+const isSolution = (bytes: Uint8Array) => strFromU8(unzipSync(bytes)['project.json']).includes('"Bonjour"')
 
 /** Exécuteur factice : relevé = premier « dire » du projet, identique à chaque graine. */
 async function fakeRun(bytes: Uint8Array, _base: unknown, seeds = [1, 2, 3, 4, 5]): Promise<RunResult> {
@@ -47,8 +54,6 @@ function spyClient(): AiClient & { requests: PreparedRequest[] } {
   return {
     requests,
     grade: (m, req) => { requests.push(req); return inner.grade(m, req) },
-    submitBatch: (m, items) => { requests.push(...items.map((i) => i.req)); return inner.submitBatch(m, items) },
-    batchResults: (id) => inner.batchResults(id),
   }
 }
 
@@ -76,7 +81,7 @@ async function setup(opts: { students: ('same' | 'different')[]; ai?: AiClient |
     progressIds.push((await getProgress(db, s.id, activityId))!.id)
   }
   const client = opts.ai === undefined ? spyClient() : opts.ai
-  const deps: Deps = { run: fakeRun, ai: () => client, now: () => new Date() }
+  const deps: Deps = { run: fakeRun, runner: 'remote', ai: () => client, now: () => new Date() }
   return { db, prof, other, activityId, classId: cls.id, progressIds, deps, client }
 }
 
@@ -156,10 +161,9 @@ describe('correction d’un défi', () => {
 describe('exécutions de la solution', () => {
   it('la solution n’est exécutée qu’une fois pour plusieurs copies, sauf si elle a échoué', async () => {
     const { db, prof, progressIds, deps } = await setup({ students: ['different', 'different'] })
-    const solution = Buffer.from(say('Bonjour')).toString('base64')
     let solutionRuns = 0, broken = true
     const run: Deps['run'] = async (bytes, base, seeds) => {
-      if (Buffer.from(bytes).toString('base64') !== solution) return fakeRun(bytes, base, seeds)
+      if (!isSolution(bytes)) return fakeRun(bytes, base, seeds)
       solutionRuns++
       const r = await fakeRun(bytes, base, seeds)
       // Première exécution ratée (machine surchargée) : elle ne doit pas rester en cache.
@@ -174,6 +178,38 @@ describe('exécutions de la solution', () => {
     }
     expect(solutionRuns).toBe(2) // échec puis une seule exécution réussie, réutilisée
     expect((await latestJob(db, prof.id, progressIds[1]))?.status).toBe('done')
+  })
+
+  it('enregistre chaque exécution envoyée au service : l’élève (avec le travail) et les références', async () => {
+    const { db, prof, progressIds, deps } = await setup({ students: ['different'] })
+    await requestCorrection(db, deps, prof.id, progressIds[0], 'propose')
+    await processQueued(db, deps)
+    const [job] = await db.select().from(autogradeJobs)
+    const calls = await db.select().from(autogradeRunnerCalls)
+    expect(calls.filter((c) => c.kind === 'eleve')).toMatchObject([{ jobId: job.id }])
+    expect(calls.filter((c) => c.kind === 'reference')).toHaveLength(1) // solution (pas de projet de départ)
+    expect(calls.every((c) => c.durationMs >= 0)).toBe(true)
+  })
+
+  it('exécuteur local : aucun appel enregistré', async () => {
+    const { db, prof, progressIds, deps } = await setup({ students: ['different'] })
+    const local = { ...deps, runner: 'local' as const }
+    await requestCorrection(db, local, prof.id, progressIds[0], 'propose')
+    await processQueued(db, local)
+    expect(await db.select().from(autogradeRunnerCalls)).toHaveLength(0)
+  })
+
+  it('l’exécution de l’élève qui échoue après avoir atteint le service est enregistrée à chaque tentative, et le travail échoue', async () => {
+    const { db, prof, progressIds, deps } = await setup({ students: ['different'] })
+    const run: Deps['run'] = async (bytes, base, seeds) => {
+      if (isSolution(bytes)) return fakeRun(bytes, base, seeds)
+      throw Object.assign(new Error('délai'), { reachedService: true })
+    }
+    const d = { ...deps, run }
+    await requestCorrection(db, d, prof.id, progressIds[0], 'propose')
+    await processQueued(db, d)
+    expect(await latestJob(db, prof.id, progressIds[0])).toMatchObject({ status: 'failed', error: 'La correction automatique a échoué, réessayez.' })
+    expect((await db.select().from(autogradeRunnerCalls)).filter((c) => c.kind === 'eleve')).toHaveLength(2) // deux tentatives
   })
 })
 
@@ -191,24 +227,22 @@ describe('élève qui reprend son défi pendant la correction', () => {
     expect((await latestJob(db, prof.id, progressIds[0]))?.status).toBe('stale')
   })
 
-  it('n’envoie pas dans le lot le travail d’un élève qui a repris son défi', async () => {
+  it('n’envoie pas à l’IA le travail d’un élève qui a repris son défi (classe)', async () => {
     const { db, prof, classId, progressIds, deps, client } = await setup({ students: ['different', 'different'] })
     await requestClassCorrection(db, deps, prof.id, classId, 'propose')
-    await processQueued(db, deps)
     await db.update(progress).set({ status: 'in_progress' }).where(eq(progress.id, progressIds[0]))
-    await processRuns(db, deps)
+    await processQueued(db, deps)
     expect((client as unknown as { requests: unknown[] }).requests).toHaveLength(1)
     expect((await latestJob(db, prof.id, progressIds[0]))?.status).toBe('stale')
   })
 })
 
-describe('erreurs de l’IA sur un lot', () => {
-  it('n’empêchent pas les autres classes d’avancer, et terminent la correction en échec', async () => {
+describe('erreurs de l’IA sur une classe', () => {
+  it('échouent copie par copie, sans bloquer, et terminent la correction', async () => {
     const { db, prof, classId, deps } = await setup({ students: ['different', 'different'] })
-    const broken: AiClient = { ...fakeClient(), submitBatch: async () => { throw new Error('lot refusé') } }
+    const broken: AiClient = { grade: async () => ({ ok: false, error: 'IA indisponible (503).' }) }
     await requestClassCorrection(db, deps, prof.id, classId, 'propose')
-    await processQueued(db, deps)
-    await processRuns(db, { ...deps, ai: () => broken })
+    await processQueued(db, { ...deps, ai: () => broken })
     expect(await runStatus(db, prof.id, classId)).toMatchObject({ total: 2, done: 0, failed: 2, finished: true })
   })
 })
@@ -228,39 +262,34 @@ describe('accès', () => {
 })
 
 describe('correction d’une classe', () => {
-  it('tri sans IA immédiat, lot pour le reste, application une seule fois après reprise', async () => {
+  it('tri sans IA immédiat, appels directs pour le reste, application une seule fois', async () => {
     const { db, prof, classId, deps } = await setup({ students: ['same', 'different', 'different'] })
     expect(await requestClassCorrection(db, deps, prof.id, classId, 'send')).toMatchObject({ ok: true, count: 3, skipped: 0 })
     await processQueued(db, deps)
-    await processRuns(db, deps)   // envoie le lot (2 défis)
-    // « Redémarrage » : un job resté « running » depuis longtemps repasse en file, les lots en attente sont réinterrogés.
-    await recoverJobs(db, deps)
-    await processRuns(db, deps)   // lot terminé → appliqué
-    await processRuns(db, deps)   // rejoué : rien de plus
+    await recoverStuck(db, new Date())
+    await processQueued(db, deps) // rejoué : rien de plus
     expect(await db.select().from(reviews)).toHaveLength(3)
     expect(await runStatus(db, prof.id, classId)).toMatchObject({ total: 3, done: 3, failed: 0 })
   })
 
-  it('reprend un job resté « running » après un redémarrage', async () => {
+  it('reprend un job resté « running » (fonction coupée) depuis plus de 15 minutes', async () => {
     const { db, prof, progressIds, deps } = await setup({ students: ['same'] })
     const r = await requestCorrection(db, deps, prof.id, progressIds[0], 'propose')
     const jobId = (r as { jobId: string }).jobId
-    await db.update(autogradeJobs).set({ status: 'running', startedAt: new Date(Date.now() - 10 * 60_000).toISOString() }).where(eq(autogradeJobs.id, jobId))
-    await recoverJobs(db, deps)
+    await db.update(autogradeJobs).set({ status: 'running', attempts: 1, startedAt: new Date(Date.now() - 16 * 60_000).toISOString() }).where(eq(autogradeJobs.id, jobId))
+    await recoverStuck(db, new Date())
     await processQueued(db, deps)
     expect((await latestJob(db, prof.id, progressIds[0]))?.status).toBe('done')
   })
 
-  it('au démarrage, reprend aussi un job interrompu récemment', async () => {
-    const { db, prof, progressIds, deps } = await setup({ students: ['same'] })
-    const r = await requestCorrection(db, deps, prof.id, progressIds[0], 'propose')
-    const jobId = (r as { jobId: string }).jobId
-    await db.update(autogradeJobs).set({ status: 'running', startedAt: new Date(Date.now() - 2 * 60_000).toISOString() }).where(eq(autogradeJobs.id, jobId))
-    await recoverJobs(db, deps)                       // en marche : trop récent pour être repris
-    expect((await latestJob(db, prof.id, progressIds[0]))?.status).toBe('running')
-    await recoverJobs(db, deps, { startup: true })     // au démarrage : un seul processus, rien ne tourne vraiment
+  it('reprend un job « waiting_ai » hérité de l’ancien fonctionnement par lots', async () => {
+    const { db, prof, classId, progressIds, deps } = await setup({ students: ['different'] })
+    await requestClassCorrection(db, deps, prof.id, classId, 'propose')
+    await db.update(autogradeJobs).set({ status: 'waiting_ai', prepared: '{}' }).where(eq(autogradeJobs.progressId, progressIds[0]))
+    await recoverStuck(db, new Date())
     await processQueued(db, deps)
     expect((await latestJob(db, prof.id, progressIds[0]))?.status).toBe('done')
+    expect(await runStatus(db, prof.id, classId)).toMatchObject({ total: 1, done: 1, finished: true })
   })
 
   it('ignore les défis d’activités non préparées', async () => {

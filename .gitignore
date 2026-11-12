@@ -54,3 +54,7 @@ next-env.d.ts
 /design-export/
 
 test-results/
+
+# Clés de compte de service Google (jamais dans le dépôt)
+cle*.json
+*-sa-key*.json

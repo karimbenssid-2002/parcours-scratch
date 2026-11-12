@@ -18,7 +18,7 @@ describe('next.config', () => {
     ]))
   })
 
-  it('build sans correction automatique : éditeur Scratch et Chromium hors des fichiers serveur, instrumentation allégée', async () => {
+  it('build sans correction automatique : éditeur Scratch et Chromium hors des fichiers serveur, exécution locale refusée', async () => {
     vi.stubEnv('AUTOGRADE_ENABLED', '')
     const config = await loadConfig()
     expect(config.outputFileTracingExcludes!['/*']).toEqual(expect.arrayContaining([
@@ -27,8 +27,27 @@ describe('next.config', () => {
     expect(config.env).toEqual({ AUTOGRADE_AU_BUILD: '0' })
   })
 
+  it('build avec service d’exécution distant (AUTOGRADE_RUNNER_URL) : éditeur et Chromium hors des fichiers serveur', async () => {
+    vi.stubEnv('AUTOGRADE_ENABLED', '1')
+    vi.stubEnv('AUTOGRADE_RUNNER_URL', 'https://service.invalid')
+    const config = await loadConfig()
+    expect(config.outputFileTracingExcludes!['/*']).toEqual(expect.arrayContaining(['./public/scratch-editor/**/*', './node_modules/playwright-core/**/*']))
+    expect(config.env).toEqual({ AUTOGRADE_AU_BUILD: '0' })
+  })
+
+  it('build sur Vercel sans service distant : jamais de Chromium local (boutons masqués)', async () => {
+    vi.stubEnv('AUTOGRADE_ENABLED', '1')
+    vi.stubEnv('AUTOGRADE_RUNNER_URL', '')
+    vi.stubEnv('VERCEL', '1')
+    const config = await loadConfig()
+    expect(config.outputFileTracingExcludes!['/*']).toEqual(expect.arrayContaining(['./public/scratch-editor/**/*', './node_modules/playwright-core/**/*']))
+    expect(config.env).toEqual({ AUTOGRADE_AU_BUILD: '0' })
+  })
+
   it('build avec correction automatique (local) : éditeur et Chromium gardés', async () => {
     vi.stubEnv('AUTOGRADE_ENABLED', '1')
+    vi.stubEnv('AUTOGRADE_RUNNER_URL', '')
+    vi.stubEnv('VERCEL', '')
     const config = await loadConfig()
     expect(config.outputFileTracingExcludes!['/*']).not.toContain('./public/scratch-editor/**/*')
     expect(config.env).toEqual({ AUTOGRADE_AU_BUILD: '1' })

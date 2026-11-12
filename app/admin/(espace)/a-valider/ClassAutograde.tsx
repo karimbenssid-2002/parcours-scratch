@@ -6,10 +6,10 @@ import { classCorrectionStatusAction, startClassCorrectionAction, type ClassRun 
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 
-type Props = { classId: string; eligible: number; skipped: number; initialRun: ClassRun; aiConfigured: boolean }
+type Props = { classId: string; eligible: number; skipped: number; initialRun: ClassRun; aiConfigured: boolean; quotaMessage: string | null }
 
 /** Correction automatique de toute la file d'une classe, avec suivi de l'avancement. */
-export function ClassAutograde({ classId, eligible, skipped, initialRun, aiConfigured }: Props) {
+export function ClassAutograde({ classId, eligible, skipped, initialRun, aiConfigured, quotaMessage }: Props) {
   const router = useRouter()
   const [run, setRun] = useState<ClassRun>(initialRun)
   const lastRun = useRef<ClassRun>(initialRun) // dernier état reçu, lu par le minuteur
@@ -51,7 +51,8 @@ export function ClassAutograde({ classId, eligible, skipped, initialRun, aiConfi
       {!running && run?.finished && <p role="status" className="text-sm text-muted">Dernière correction automatique : {run.done} corrigé(s), {run.failed} à faire à la main.</p>}
       {skipped > 0 && <p className="text-sm text-muted">{skipped} défi{skipped > 1 ? 's' : ''} ne peu{skipped > 1 ? 'vent' : 't'} pas être corrigé{skipped > 1 ? 's' : ''} automatiquement : activité non préparée.</p>}
       {!aiConfigured && <p className="text-sm text-muted">Correction automatique non configurée (clé d’API absente).</p>}
-      {!running && eligible > 0 && aiConfigured && (
+      {!running && eligible > 0 && quotaMessage && <p role="status" className="text-sm font-semibold text-st-almost">{quotaMessage}</p>}
+      {!running && eligible > 0 && aiConfigured && !quotaMessage && (
         <>
           <p className="text-sm text-muted">{eligible === 1 ? '1 défi prêt' : `${eligible} défis prêts`} pour la correction automatique.</p>
           <div className="grid gap-2 sm:grid-cols-2">

@@ -30,10 +30,15 @@
       trace.questions.push({ sprite: sprite, text: text, answer: answer })
       setTimeout(function () { runtime.emit('ANSWER', answer) }, 0)
     })
+    // Le moteur de rendu reste le même d'une exécution à l'autre : il n'est enveloppé qu'une fois, et les enveloppes
+    // écrivent dans la trace courante (remise à zéro par start). Sinon elles s'empilent : 6, 12, 18… tracés au lieu de 6.
     var r = runtime.renderer
-    var line = r.penLine.bind(r), point = r.penPoint.bind(r)
-    r.penLine = function (skin, attrs, x0, y0, x1, y1) { record(x0, y0); record(x1, y1); trace.pen.lines++; trace.pen.parts.push([x0, y0, x1, y1].map(Math.round).join(',')); return line(skin, attrs, x0, y0, x1, y1) }
-    r.penPoint = function (skin, attrs, x, y) { record(x, y); trace.pen.parts.push([x, y].map(Math.round).join(',')); return point(skin, attrs, x, y) }
+    if (!r.__penWrapped) {
+      var line = r.penLine.bind(r), point = r.penPoint.bind(r)
+      r.penLine = function (skin, attrs, x0, y0, x1, y1) { record(x0, y0); record(x1, y1); trace.pen.lines++; trace.pen.parts.push([x0, y0, x1, y1].map(Math.round).join(',')); return line(skin, attrs, x0, y0, x1, y1) }
+      r.penPoint = function (skin, attrs, x, y) { record(x, y); trace.pen.parts.push([x, y].map(Math.round).join(',')); return point(skin, attrs, x, y) }
+      r.__penWrapped = true
+    }
     function record(x, y) { var b = trace.pen.bbox; trace.pen.bbox = b ? [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)] : [x, y, x, y] }
     function watch(target) {
       function costumeName() { var c = target.getCostumes()[target.currentCostume]; return c ? c.name : null }

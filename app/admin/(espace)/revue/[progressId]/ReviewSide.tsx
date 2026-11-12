@@ -17,6 +17,8 @@ type Props = {
   autogradeReady: boolean
   aiConfigured: boolean
   autogradeEnabled: boolean
+  /** Plafond mensuel d'exécutions atteint : message à afficher, boutons désactivés. */
+  quotaMessage: string | null
   /** Lien vers la fiche d'activité à préparer (admin uniquement), sinon null. */
   prepareHref: string | null
   initialJob: JobView | null
@@ -25,7 +27,7 @@ type Props = {
 }
 
 const ACTIVE = ['queued', 'running', 'waiting_ai']
-const MODEL_LABELS: Record<string, string> = { 'claude-haiku-4-5': 'Haiku 4.5', 'claude-sonnet-5-5': 'Sonnet 5.5' }
+const MODEL_LABELS: Record<string, string> = { 'claude-haiku-4-5': 'Haiku 4.5', 'claude-haiku-5-5': 'Haiku 5.5', 'claude-sonnet-5-5': 'Sonnet 5.5' }
 
 /** Formulaire de décision, avec la correction automatique du défi ouvert :
  *  « Corriger et vérifier » pré-remplit la décision (envoi manuel), « Corriger et envoyer » l'envoie directement. */
@@ -60,8 +62,8 @@ export function ReviewSide(props: Props) {
 
   const proposal = job?.status === 'done' ? job.proposal : null
 
-  const disabled = !props.autogradeReady || active || pending
-  const why = props.autogradeReady ? undefined : 'Activité non préparée pour la correction automatique'
+  const disabled = !props.autogradeReady || active || pending || !!props.quotaMessage
+  const why = !props.autogradeReady ? 'Activité non préparée pour la correction automatique' : props.quotaMessage ?? undefined
   const headerAction = (
     <div role="group" aria-label="Correction automatique" className="grid w-full gap-2 sm:grid-cols-2">
       <Button variant="secondary" className="min-h-11 justify-start px-3 text-left text-[15px]" disabled={disabled} title={why} onClick={() => launch('propose')}>
@@ -83,6 +85,7 @@ export function ReviewSide(props: Props) {
           {props.prepareHref ? <> <Link href={props.prepareHref} className="font-semibold text-primary-ink hover:underline">Préparer l’activité</Link></> : ' L’administrateur peut la préparer.'}
         </p>
       )}
+      {props.autogradeReady && props.quotaMessage && <p role="status" className="text-sm font-semibold text-st-almost">{props.quotaMessage}</p>}
       {props.autogradeReady && !props.aiConfigured && (
         <p className="text-sm text-muted">Clé d’API absente : seule une proposition sans IA est possible (travail identique à la solution, ou vide).</p>
       )}

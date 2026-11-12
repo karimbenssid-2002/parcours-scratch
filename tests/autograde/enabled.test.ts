@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const ensureWorker = vi.fn()
-vi.mock('@/lib/autograde/worker', () => ({ ensureWorker }))
+const scheduleDrain = vi.fn()
+vi.mock('@/lib/autograde/launch', () => ({ scheduleDrain, pollSafetyNet: vi.fn() }))
 vi.mock('@/lib/auth/session', () => ({ requireTeacher: async () => ({ id: 'prof', role: 'admin' }) }))
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }))
 vi.mock('@/lib/db/client', () => ({ getDb: () => { throw new Error('la base ne doit pas être touchée') } }))
@@ -15,7 +15,7 @@ describe('correction automatique désactivable', () => {
     saved = { enabled: process.env.AUTOGRADE_ENABLED, key: process.env.ANTHROPIC_API_KEY, fake: process.env.AUTOGRADE_FAKE_AI, runtime: process.env.NEXT_RUNTIME }
     delete process.env.AUTOGRADE_ENABLED; delete process.env.AUTOGRADE_FAKE_AI
     process.env.ANTHROPIC_API_KEY = 'sk-test'; process.env.NEXT_RUNTIME = 'nodejs'
-    ensureWorker.mockClear()
+    scheduleDrain.mockClear()
   })
   afterEach(() => {
     const restore = (k: string, v: string | undefined) => { if (v === undefined) delete process.env[k]; else process.env[k] = v }
@@ -42,7 +42,46 @@ describe('correction automatique désactivable', () => {
       const activite = await import('@/app/admin/(espace)/activites/[activityId]/autograde-actions')
       expect(await revue.startCorrectionAction(UUID, 'propose')).toEqual({ error: MESSAGE })
       expect(await activite.testAutogradeAction(UUID)).toEqual({ error: MESSAGE })
-      expect(ensureWorker).not.toHaveBeenCalled()
+      expect(scheduleDrain).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('service d’exécution distant (AUTOGRADE_RUNNER_URL) : active même sans Chromium au build, mais jamais sans AUTOGRADE_ENABLED=1', async () => {
+    vi.stubEnv('AUTOGRADE_AU_BUILD', '0')
+    vi.stubEnv('AUTOGRADE_RUNNER_URL', 'https://service.invalid')
+    try {
+      const { autogradeEnabled } = await import('@/lib/autograde/enabled')
+      expect(autogradeEnabled()).toBe(false)
+      process.env.AUTOGRADE_ENABLED = '1'
+      expect(autogradeEnabled()).toBe(false) // adresse sans clé de compte de service : pas configuré
+      vi.stubEnv('AUTOGRADE_RUNNER_SA_KEY', 'clé-de-compte-de-service-inventée')
+      expect(autogradeEnabled()).toBe(true)
+      vi.stubEnv('AUTOGRADE_RUNNER_URL', '')
+      expect(autogradeEnabled()).toBe(false) // ni service ni Chromium local
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('sur Vercel : désactivée sans secret de relance (AUTOGRADE_RELAUNCH_SECRET, 32 caractères au moins)', async () => {
+    process.env.AUTOGRADE_ENABLED = '1'
+    vi.stubEnv('AUTOGRADE_AU_BUILD', '0')
+    vi.stubEnv('VERCEL', '1')
+    vi.stubEnv('AUTOGRADE_RUNNER_URL', 'https://service.invalid')
+    vi.stubEnv('AUTOGRADE_RUNNER_SA_KEY', 'clé-de-compte-de-service-inventée')
+    try {
+      const { autogradeEnabled } = await import('@/lib/autograde/enabled')
+      vi.stubEnv('AUTOGRADE_RELAUNCH_SECRET', '')
+      expect(autogradeEnabled()).toBe(false)
+      vi.stubEnv('AUTOGRADE_RELAUNCH_SECRET', 'trop-court')
+      expect(autogradeEnabled()).toBe(false)
+      vi.stubEnv('AUTOGRADE_RELAUNCH_SECRET', 'secret-de-relance-invente-0123456789abcdef')
+      expect(autogradeEnabled()).toBe(true)
+      vi.stubEnv('VERCEL', '')
+      vi.stubEnv('AUTOGRADE_RELAUNCH_SECRET', '')
+      expect(autogradeEnabled()).toBe(true) // hors Vercel : relance facultative
     } finally {
       vi.unstubAllEnvs()
     }
@@ -57,15 +96,6 @@ describe('correction automatique désactivable', () => {
     expect(isAiConfigured()).toBe(true)
   })
 
-  it('le worker ne démarre pas sans le drapeau', async () => {
-    const { register } = await import('../../instrumentation')
-    await register()
-    expect(ensureWorker).not.toHaveBeenCalled()
-    process.env.AUTOGRADE_ENABLED = '1'
-    await register()
-    expect(ensureWorker).toHaveBeenCalledTimes(1)
-  })
-
   it('toutes les actions qui lancent une correction refusent sans le drapeau', async () => {
     const revue = await import('@/app/admin/(espace)/revue/[progressId]/autograde-actions')
     const classe = await import('@/app/admin/(espace)/a-valider/autograde-actions')
@@ -76,6 +106,6 @@ describe('correction automatique désactivable', () => {
     expect(await activite.testAutogradeAction(UUID)).toEqual({ error: MESSAGE })
     expect(await revue.correctionStatusAction(UUID)).toBeNull()
     expect(await classe.classCorrectionStatusAction(UUID)).toBeNull()
-    expect(ensureWorker).not.toHaveBeenCalled()
+    expect(scheduleDrain).not.toHaveBeenCalled()
   })
 })

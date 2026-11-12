@@ -242,6 +242,7 @@ export const autogradeJobs = pgTable('autograde_jobs', {
   createdAt: nowIso('created_at'),
   startedAt: text('started_at'),
   finishedAt: text('finished_at'),
+  attempts: integer('attempts').notNull().default(0), // tentatives d'exécution (file de corrections)
 }, (t) => [
   // Deux demandes simultanées (double clic, deux onglets) ne peuvent pas lancer deux corrections du même défi.
   uniqueIndex('autograde_jobs_one_active').on(t.progressId)
@@ -257,6 +258,20 @@ export const autogradeUsage = pgTable('autograde_usage', {
   outputTokens: integer('output_tokens').notNull(),
   batch: boolean('batch').notNull().default(false),
   createdAt: nowIso('created_at'),
+}).enableRLS()
+/** Relevés de la solution et du projet de départ d'une activité : toujours identiques (graines fixes, temps simulé), donc gardés. */
+export const autogradeReferenceRuns = pgTable('autograde_reference_runs', {
+  key: text('key').primaryKey(), // SHA-256 du fichier + réglages + graines
+  result: text('result').notNull(), // JSON RunResult (jamais le projet lui-même)
+  createdAt: nowIso('created_at'),
+}).enableRLS()
+/** Chaque exécution envoyée au service d'exécution (plafond mensuel : on compte kind = 'eleve'). */
+export const autogradeRunnerCalls = pgTable('autograde_runner_calls', {
+  id: id(),
+  at: nowIso('at'),
+  jobId: text('job_id').references(() => autogradeJobs.id, { onDelete: 'set null' }),
+  durationMs: integer('duration_ms').notNull(),
+  kind: text('kind', { enum: ['eleve', 'reference', 'test'] }).notNull(),
 }).enableRLS()
 export const appSettings = pgTable('app_settings', { key: text('key').primaryKey(), value: text('value').notNull() }).enableRLS()
 /** Tentatives récentes (connexion, inscription, demandes) : en base, car chaque requête peut tomber sur une instance différente. */

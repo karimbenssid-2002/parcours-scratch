@@ -9,7 +9,7 @@ import { STATUS_LABELS } from '@/lib/progress/rules'
 import { StatusBadge } from '@/components/eleve/StatusBadge'
 import { YouTubeEmbed } from '@/components/eleve/YouTubeEmbed'
 import { ReviewSide } from './ReviewSide'
-import { isAutogradeReady } from '@/lib/db/autograde'
+import { isAutogradeReady, quotaBlock, quotaState } from '@/lib/db/autograde'
 import { latestJob, pendingProposals } from '@/lib/autograde/service'
 import { isAiConfigured } from '@/lib/autograde/ai'
 import { autogradeEnabled } from '@/lib/autograde/enabled'
@@ -20,6 +20,8 @@ import { ReviewEditor } from './ReviewEditor'
 import { ensureClosed } from '@/lib/deadlines/ensure'
 
 export const metadata = { title: 'Revue d’un défi' }
+// Les actions de correction automatique de cette page vident la file après la réponse (after()) : jusqu'à 300 s.
+export const maxDuration = 300
 
 export default async function ReviewPage({ params, searchParams }: { params: Promise<{ progressId: string }>; searchParams: Promise<{ classe?: string }> }) {
   const teacher = await requireTeacher()
@@ -40,6 +42,7 @@ export default async function ReviewPage({ params, searchParams }: { params: Pro
   const deadlinePassed = dueAt !== null && now().toISOString() >= dueAt
   const autogradeReady = await isAutogradeReady(db, progress.activityId)
   const job = await latestJob(db, teacher.id, progressId)
+  const quotaMessage = autogradeEnabled() ? quotaBlock(await quotaState(db, now()), 1) : null
   const pending = (await pendingProposals(db, [progressId])).get(progressId)
   // Après une correction envoyée automatiquement : défi suivant de la file, sinon retour à la file.
   const nextHref = next ? `/admin/revue/${next}${inClass}` : `/admin/a-valider${inClass}`
@@ -83,7 +86,7 @@ export default async function ReviewPage({ params, searchParams }: { params: Pro
         </div>
         <aside className="space-y-4">
           {progress.status === 'submitted'
-            ? <ReviewSide progressId={progress.id} classId={classId} deadlinePassed={deadlinePassed} autogradeReady={autogradeReady} aiConfigured={isAiConfigured()} autogradeEnabled={autogradeEnabled()}
+            ? <ReviewSide progressId={progress.id} classId={classId} deadlinePassed={deadlinePassed} autogradeReady={autogradeReady} aiConfigured={isAiConfigured()} autogradeEnabled={autogradeEnabled()} quotaMessage={quotaMessage}
                 prepareHref={teacher.role === 'admin' ? `/admin/activites/${progress.activityId}` : null} initialJob={job}
                 initialPrefill={pending ? { jobId: pending.jobId, decision: pending.proposal.decision, comment: pending.proposal.comment } : null} nextHref={nextHref} />
             : <p className="glass p-5 text-muted">Ce défi n'est pas en attente de validation : vous pouvez le consulter et le lancer.</p>}
