@@ -36,7 +36,10 @@ export default async function AdminHome() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-muted first-letter:uppercase">{today()}</p>
-          <h1 className="text-[30px] font-semibold leading-tight tracking-[-0.02em] md:text-[40px]">Bonjour {teacher.firstName}</h1>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="text-[30px] font-semibold leading-tight tracking-[-0.02em] md:text-[40px]">Bonjour {teacher.firstName}</h1>
+            <span className="rounded-full bg-primary-2/10 px-3 py-1 text-sm font-semibold text-primary-ink">Espace enseignant</span>
+          </div>
         </div>
         <span className="hidden rounded-[10px] bg-white px-3.5 py-2 shadow-clay sm:block">
           <Image src="/brand/lycee-malraux.png" alt="Lycée Français International André-Malraux" width={98} height={36} style={{ height: 36, width: 'auto' }} />

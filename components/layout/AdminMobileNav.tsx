@@ -9,7 +9,7 @@ export function AdminMobileNav({ pendingReviews, pendingRequests }: { pendingRev
   return (
     <>
       <header className="sticky top-0 z-20 flex h-14 items-center gap-2.5 bg-nav px-3.5 text-white md:hidden">
-        <Link href="/admin" aria-label="Parcours Scratch, accueil" className="grid size-10 place-items-center rounded-xl bg-white p-0.5"><Modulo size={36} /></Link>
+        <Link href="/admin" aria-label="Parcours Scratch, accueil" className="grid size-10 place-items-center"><Modulo size={40} variant="prof" /></Link>
         <span className="text-lg font-semibold">Parcours Scratch</span>
       </header>
       <TabBar label="Onglets enseignant" tabs={[

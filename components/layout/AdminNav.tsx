@@ -28,8 +28,8 @@ export function AdminNav({ role, name, pendingRequests, pendingReviews }: { role
   return (
     <nav aria-label="Navigation principale"
       className="sticky top-0 z-20 hidden h-dvh w-[92px] shrink-0 flex-col items-center gap-1 overflow-y-auto bg-nav pb-16 pt-4 text-white md:flex">
-      <Link href="/admin" aria-label="Parcours Scratch, accueil" className="mb-3 grid size-12 shrink-0 place-items-center rounded-[14px] bg-white p-0.5">
-        <Modulo size={44} />
+      <Link href="/admin" aria-label="Parcours Scratch, accueil" className="mb-3 grid size-12 shrink-0 place-items-center">
+        <Modulo size={48} variant="prof" />
       </Link>
       {items.filter((i) => !i.adminOnly || role === 'admin').map(({ href, label, short, icon: Icon, badge }) => {
         const active = isActive(href)
