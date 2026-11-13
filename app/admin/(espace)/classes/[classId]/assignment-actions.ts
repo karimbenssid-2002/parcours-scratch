@@ -3,11 +3,13 @@ import { revalidatePath } from 'next/cache'
 import { requireTeacher } from '@/lib/auth/session'
 import { getDb } from '@/lib/db/client'
 import { getClassForTeacher } from '@/lib/db/classes'
-import { addAssignments, removeAssignment, setAssignmentDue, setAssignmentOrder } from '@/lib/db/assignments'
+import { addAssignmentsDetailed, removeAssignment, setAssignmentDue, setAssignmentOrder } from '@/lib/db/assignments'
 import { parseSchoolDateTime } from '@/lib/deadlines/time'
 import { setSolutionShared } from '@/lib/autograde/corrige'
 import { parseLevel } from '@/lib/levels'
-import { giveProgression, giveThemes } from '@/lib/progressions/give'
+import { giveProgressionDetailed, giveThemesDetailed } from '@/lib/progressions/give'
+import { schedule } from '@/lib/push/schedule'
+import { notifyNewAssignments } from '@/lib/push/events'
 
 type Result = { error?: string; success?: string }
 
@@ -17,12 +19,17 @@ async function ownClass(classId: string) {
   const cls = await getClassForTeacher(db, teacher.id, classId)
   return cls ? { db, cls } : null
 }
+/** Une seule notification par action, avec les seuls défis réellement ajoutés. */
+function announce(db: ReturnType<typeof getDb>, classId: string, ids: string[]): number {
+  if (ids.length > 0) schedule(() => notifyNewAssignments(db, classId, ids))
+  return ids.length
+}
 const done = (classId: string, r: Result): Result => { revalidatePath(`/admin/classes/${classId}`); return r }
 
 export async function addAssignmentsAction(classId: string, activityIds: string[]): Promise<Result> {
   const own = await ownClass(classId)
   if (!own) return { error: 'Classe introuvable.' }
-  const n = await addAssignments(own.db, classId, activityIds.slice(0, 200))
+  const n = announce(own.db, classId, await addAssignmentsDetailed(own.db, classId, activityIds.slice(0, 200)))
   return done(classId, { success: added(n) })
 }
 
@@ -32,7 +39,7 @@ const added = (n: number) => (n === 0 ? 'Aucun nouveau défi ajouté.' : `${n} d
 export async function giveThemesAction(classId: string, themeIds: string[]): Promise<Result> {
   const own = await ownClass(classId)
   if (!own || !Array.isArray(themeIds)) return { error: 'Classe introuvable.' }
-  const n = await giveThemes(own.db, classId, themeIds.slice(0, 50).map(String))
+  const n = announce(own.db, classId, await giveThemesDetailed(own.db, classId, themeIds.slice(0, 50).map(String)))
   return done(classId, { success: added(n) })
 }
 
@@ -41,7 +48,7 @@ export async function giveProgressionAction(classId: string, levelValue: string)
   const own = await ownClass(classId)
   const level = parseLevel(levelValue)
   if (!own || !level) return { error: 'Classe ou niveau invalide.' }
-  const n = await giveProgression(own.db, classId, level)
+  const n = announce(own.db, classId, await giveProgressionDetailed(own.db, classId, level))
   return done(classId, { success: added(n) })
 }
 

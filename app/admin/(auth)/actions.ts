@@ -1,11 +1,13 @@
 'use server'
 import { headers } from 'next/headers'
 import { getDb } from '@/lib/db/client'
-import { createTeacherRequest } from '@/lib/db/teacher-requests'
+import { createTeacherRequestId } from '@/lib/db/teacher-requests'
 import { TEACHER_DOMAINS, teacherIdentity } from '@/lib/auth/identity'
 import { isSchoolEmail, normalizeEmail } from '@/lib/auth/validation'
 import { isBlocked } from '@/lib/auth/limits'
 import { sendEmail } from '@/lib/email'
+import { schedule } from '@/lib/push/schedule'
+import { notifyTeacherRequest } from '@/lib/push/events'
 
 export type FormState = { error?: string; success?: string } | null
 
@@ -20,12 +22,14 @@ export async function requestTeacherAccess(_prev: FormState, formData: FormData)
   if (await isBlocked(db, 'request', { ip: await clientIp(), account: teacherIdentity(email) })) return { error: 'Trop de demandes. Réessayez plus tard.' }
 
   // Doublon (compte ou demande en attente de même identité, l'un ou l'autre domaine) : ni demande ni notification.
-  if ((await createTeacherRequest(db, email)) === 'created') {
+  const request = await createTeacherRequestId(db, email)
+  if (request.status === 'created') {
     await sendEmail({
       to: process.env.ADMIN_NOTIFY_EMAIL ?? 'admin',
       subject: "Demande d'inscription — Parcours Scratch",
       text: `Demande d'inscription de ${email}.\nÀ traiter dans Administration > Demandes.`,
     })
+    schedule(() => notifyTeacherRequest(db, request.id))
   }
   // Réponse identique dans tous les cas : ne révèle pas l'existence d'un compte.
   return { success: "Demande envoyée. Vous pourrez vous connecter avec Google dès qu'elle aura été validée." }

@@ -8,6 +8,8 @@ import type { Level } from '@/lib/levels'
 import { givesActivityTo, grantExtension } from '@/lib/deadlines/extensions'
 import { parseSchoolDateTime } from '@/lib/deadlines/time'
 import { now } from '@/lib/clock'
+import { schedule } from '@/lib/push/schedule'
+import { notifyReview } from '@/lib/push/events'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_COMMENT = 2000
@@ -139,6 +141,8 @@ export async function decide(
     return true
   })
   if (!done) return { ok: false, error: 'Ce défi n’est plus en attente de validation (il a peut-être déjà été traité).' }
+  // Toute décision enregistrée est visible de l'élève (y compris une correction automatique envoyée directement).
+  schedule(() => notifyReview(db, progressId))
   if (extendTo) await grantExtension(db, teacherId, view.student.id, view.progress.activityId, extendTo)
   return { ok: true }
 }

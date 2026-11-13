@@ -20,18 +20,23 @@ export async function listClassAssignments(db: DB, classId: string): Promise<Ass
 
 /** Ajoute à la suite les activités publiées pas encore données ; renvoie le nombre ajouté. */
 export async function addAssignments(db: DB, classId: string, activityIds: string[]): Promise<number> {
+  return (await addAssignmentsDetailed(db, classId, activityIds)).length
+}
+
+/** Comme `addAssignments`, mais renvoie les identifiants des seules activités réellement ajoutées (dans l'ordre d'ajout). */
+export async function addAssignmentsDetailed(db: DB, classId: string, activityIds: string[]): Promise<string[]> {
   return db.transaction(async (tx) => {
     const unique = [...new Set(activityIds)]
-    if (unique.length === 0) return 0
+    if (unique.length === 0) return []
     const published = new Set((await tx.select({ id: activities.id }).from(activities)
       .where(and(inArray(activities.id, unique), eq(activities.status, 'published')))).map((r) => r.id))
     const [last] = await tx.select({ m: max(classActivities.position) }).from(classActivities).where(eq(classActivities.classId, classId))
     let position = last?.m ?? 0
-    let added = 0
+    const added: string[] = []
     for (const activityId of unique.filter((id) => published.has(id))) {
       const inserted = (await tx.insert(classActivities).values({ classId, activityId, position: position + 1 }).onConflictDoNothing()
         .returning({ activityId: classActivities.activityId })).length === 1
-      if (inserted) { position++; added++ }
+      if (inserted) { position++; added.push(activityId) }
     }
     return added
   })

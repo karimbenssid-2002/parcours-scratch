@@ -3,6 +3,8 @@ import type { DB } from '@/lib/db/client'
 import { activities, classActivities, classes, classStudents, deadlineExtensions, lateNotices, progress, students } from '@/lib/db/schema'
 import { effectiveDueAt } from '@/lib/db/assignments'
 import { now } from '@/lib/clock'
+import { schedule } from '@/lib/push/schedule'
+import { notifyAutoSubmissions } from '@/lib/push/events'
 
 export const GRACE_MS = 120_000
 const OPEN = ['not_started', 'in_progress', 'almost', 'needs_work'] as const
@@ -38,12 +40,13 @@ export async function closeOverdue(db: DB, at: Date = now(), options: { only?: {
     .map((p) => [`${p.studentId}:${p.activityId}`, p.closedDueAt]))
 
   let closed = 0
+  const autoSubmitted: { studentId: string; activityId: string }[] = []
   const stamp = at.toISOString()
   for (const [key, pair] of pairs) {
     const due = effectiveDueAt(pair.dues, extensions.get(key) ?? null)
     if (!due || due > cutoff) continue
     if (closedDue.get(key) === due) continue // échéance déjà traitée pour cette paire
-    closed += await db.transaction(async (tx) => {
+    const outcome = await db.transaction(async (tx) => {
       const where = and(eq(progress.studentId, pair.studentId), eq(progress.activityId, pair.activityId))
       await tx.insert(progress).values({ studentId: pair.studentId, activityId: pair.activityId }).onConflictDoNothing()
       const [row] = await tx.select().from(progress).where(where).limit(1)
@@ -62,8 +65,12 @@ export async function closeOverdue(db: DB, at: Date = now(), options: { only?: {
       for (const teacherId of pair.teacherIds)
         await tx.insert(lateNotices).values({ teacherId, progressId: row.id, kind: hasWork ? 'auto_submitted' : 'not_submitted', dueAt: due })
           .onConflictDoNothing()
-      return 1
+      return hasWork ? 2 : 1 // 2 : copie rendue automatiquement
     })
+    if (outcome > 0) closed++
+    if (outcome === 2) autoSubmitted.push({ studentId: pair.studentId, activityId: pair.activityId })
   }
+  // Notification groupée par enseignant, après la réponse ; jamais bloquante.
+  if (autoSubmitted.length) schedule(() => notifyAutoSubmissions(db, autoSubmitted))
   return closed
 }

@@ -3,6 +3,7 @@
 // avec la session). Seule une page « hors connexion » est gardée, montrée quand le réseau manque.
 const CACHE = 'parcours-scratch-v1'
 const OFFLINE = '/hors-connexion.html'
+importScripts('/sw-click.js') // décisions pures des notifications (testées sous Node)
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.add(OFFLINE)).then(() => self.skipWaiting()))
@@ -19,4 +20,29 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.mode !== 'navigate') return // le reste : comportement normal du navigateur
   event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE)))
+})
+
+// Notifications : titre et texte courts décidés par le serveur ; l'adresse (même origine) n'est ouverte qu'au clic.
+self.addEventListener('push', (event) => {
+  let text = ''
+  try { text = event.data ? event.data.text() : '' } catch { /* message illisible : notification neutre */ }
+  const n = self.swClick.notificationFrom(text, self.location.origin)
+  event.waitUntil(self.registration.showNotification(n.title, n.options))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const action = self.swClick.clickAction(event.notification.data && event.notification.data.url, self.location.origin, wins.map((w) => w.url))
+    if (action.kind === 'ignore') return
+    if (action.kind === 'focus') {
+      try {
+        const win = await wins[action.index].focus()
+        await (win || wins[action.index]).navigate(action.url)
+        return
+      } catch { /* mise au premier plan ou navigation refusée : nouvelle fenêtre */ }
+    }
+    await self.clients.openWindow(action.url)
+  })())
 })

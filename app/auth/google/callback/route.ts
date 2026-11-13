@@ -7,6 +7,7 @@ import {
 import { studentGoogleLogin, teacherGoogleLogin } from '@/lib/auth/google-login'
 import { checkGoogleIdentity, type GoogleIdentity, type LoginKind } from '@/lib/auth/identity'
 import { isBlocked } from '@/lib/auth/limits'
+import { dropForeignDeviceSubscription } from '@/lib/push/device'
 import { loginPath, type LoginError } from '@/lib/auth/login-errors'
 import { adminSessionCookie, studentSessionCookie } from '@/lib/auth/session'
 
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    return await decide(db, kind, identity, toLogin)
+    return await decide(db, kind, identity, toLogin, request)
   } catch (e) {
     // Base indisponible, etc. : pas de page d'erreur 500, et le cookie de connexion en cours est effacé.
     logGoogleFailure(`base (rôle ${kind}) : ${serverErrorDetail(e)}`)
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
 }
 
 /** Règle du rôle, une fois l'identité Google obtenue. */
-async function decide(db: DB, kind: LoginKind, identity: GoogleIdentity, toLogin: (k: LoginKind, e?: LoginError) => NextResponse) {
+async function decide(db: DB, kind: LoginKind, identity: GoogleIdentity, toLogin: (k: LoginKind, e?: LoginError) => NextResponse, request: NextRequest) {
   const checked = checkGoogleIdentity(identity, kind)
   if (!checked.ok) {
     // Pour régler les domaines acceptés (ex. mlfmonde.org domaine secondaire d'une autre organisation) : sans l'adresse.
@@ -87,11 +88,13 @@ async function decide(db: DB, kind: LoginKind, identity: GoogleIdentity, toLogin
     if (!r.ok) return toLogin(kind, r.reason)
     const out = res('/')
     setSessionCookie(out, await studentSessionCookie(r.student))
+    await dropForeignDeviceSubscription(request, out, 'eleve', { kind: 'student', id: r.student.id })
     return out
   }
   const r = await teacherGoogleLogin(db, checked.email)
   if (!r.ok) return toLogin(kind, r.reason)
   const out = res('/admin')
   setSessionCookie(out, await adminSessionCookie(r.teacher))
+  await dropForeignDeviceSubscription(request, out, 'admin', { kind: 'teacher', id: r.teacher.id })
   return out
 }

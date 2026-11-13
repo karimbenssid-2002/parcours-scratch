@@ -36,11 +36,17 @@ export async function recordSave(db: DB, studentId: string, activityId: string, 
   })
 }
 
-export async function submitProgress(db: DB, studentId: string, activityId: string): Promise<boolean> {
+/** Rend la copie ; renvoie l'identifiant de la progression, ou null si le rendu est refusé. */
+export async function submitProgressId(db: DB, studentId: string, activityId: string): Promise<string | null> {
   const now = new Date().toISOString()
-  return (await db.update(progress).set({ status: 'submitted', submittedAt: now, updatedAt: now })
+  const rows = await db.update(progress).set({ status: 'submitted', submittedAt: now, updatedAt: now })
     .where(and(whereRow(studentId, activityId), inArray(progress.status, [...SUBMITTABLE_STATUSES]), isNotNull(progress.projectPath)))
-    .returning({ id: progress.id })).length === 1
+    .returning({ id: progress.id })
+  return rows.length === 1 ? rows[0].id : null
+}
+
+export async function submitProgress(db: DB, studentId: string, activityId: string): Promise<boolean> {
+  return (await submitProgressId(db, studentId, activityId)) !== null
 }
 
 /** Oublie le travail de l'élève (le fichier est supprimé par l'appelant). */

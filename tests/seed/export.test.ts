@@ -88,6 +88,9 @@ describe('exportContent', () => {
     expect(res.missing).toEqual([`starters/${A2}.sb3`])
     expect(res.staticThumbnails).toBe(1)
     expect(res.admin).toBe('created')
+    // Contenu copié : aucune activité publiée n'est « à annoncer » aux enseignants.
+    const rows = await db.select({ status: activities.status, announcedAt: activities.announcedAt }).from(activities)
+    for (const r of rows) expect(r.status === 'published' ? r.announcedAt !== null : r.announcedAt === null).toBe(true)
 
     expect([...written.keys()].sort()).toEqual([`solutions/${A1}.sb3`, `starters/${A1}.sb3`, `vignettes/${VIGNETTE}`])
     expect(written.get(`starters/${A1}.sb3`)).toBe('depart-1')

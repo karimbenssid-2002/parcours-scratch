@@ -4,12 +4,14 @@ import type { DB } from '@/lib/db/client'
 import type { Student } from '@/lib/db/students'
 import { getActivityDetail, type ActivityDetail } from '@/lib/db/activities'
 import { studentDeadline } from '@/lib/db/assignments'
-import { getProgress, recordSave, restartProgress, submitProgress, type Progress } from '@/lib/db/progress'
+import { getProgress, recordSave, restartProgress, submitProgressId, type Progress } from '@/lib/db/progress'
 import { canEdit } from '@/lib/progress/rules'
 import { inspectScratchFile } from '@/lib/scratch/project-file'
 import { deleteStored, readStored, writeStored } from '@/lib/storage/files'
 import { closeOverdue } from '@/lib/deadlines/close'
 import { now } from '@/lib/clock'
+import { schedule } from '@/lib/push/schedule'
+import { notifySubmission } from '@/lib/push/events'
 
 export type ServiceError = { ok: false; status: 400 | 404 | 409 | 413; error: string }
 
@@ -104,8 +106,10 @@ export async function submitDefi(db: DB, student: Student, activityId: string): 
   const opened = await openActivityFor(db, student, activityId)
   if (!opened) return NOT_FOUND
   if (opened.dueAt && now().toISOString() > opened.dueAt) return { ok: false, status: 409, error: DEADLINE_PASSED }
-  if (!(await submitProgress(db, student.id, activityId)))
+  const progressId = await submitProgressId(db, student.id, activityId)
+  if (!progressId)
     return { ok: false, status: 409, error: 'Sauvegarde ton travail avant de l’envoyer (ou il a déjà été envoyé).' }
+  schedule(() => notifySubmission(db, progressId))
   return { ok: true }
 }
 

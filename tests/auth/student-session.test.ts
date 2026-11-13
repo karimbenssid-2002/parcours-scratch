@@ -71,25 +71,25 @@ describe('déconnexion', () => {
   const cleared = (res: Response, name: string) =>
     res.headers.getSetCookie().some((c) => c.startsWith(`${name}=;`) || (c.startsWith(`${name}=`) && /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c)))
 
-  it("élève : session effacée, page de connexion avec l'indice de déconnexion", () => {
-    const res = studentLogout(new NextRequest('http://localhost:3000/deconnexion'))
+  it("élève : session effacée, page de connexion avec l'indice de déconnexion", async () => {
+    const res = await studentLogout(new NextRequest('http://localhost:3000/deconnexion'))
     expect(location(res)).toBe('/connexion?deconnexion=1')
     expect(cleared(res, 'student_session')).toBe(true)
   })
 
-  it("élève retiré des classes : session effacée, message « non inscrit » (sans l'indice)", () => {
-    const res = studentLogout(new NextRequest('http://localhost:3000/deconnexion?erreur=non-inscrit'))
+  it("élève retiré des classes : session effacée, message « non inscrit » (sans l'indice)", async () => {
+    const res = await studentLogout(new NextRequest('http://localhost:3000/deconnexion?erreur=non-inscrit'))
     expect(location(res)).toBe('/connexion?erreur=non-inscrit')
     expect(cleared(res, 'student_session')).toBe(true)
   })
 
-  it('élève : tout autre code est ignoré', () => {
-    const res = studentLogout(new NextRequest('http://localhost:3000/deconnexion?erreur=https://autre.example'))
+  it('élève : tout autre code est ignoré', async () => {
+    const res = await studentLogout(new NextRequest('http://localhost:3000/deconnexion?erreur=https://autre.example'))
     expect(location(res)).toBe('/connexion?deconnexion=1')
   })
 
-  it("enseignant : session effacée, page de connexion avec l'indice de déconnexion", () => {
-    const res = adminLogout(new NextRequest('http://localhost:3000/admin/deconnexion'))
+  it("enseignant : session effacée, page de connexion avec l'indice de déconnexion", async () => {
+    const res = await adminLogout(new NextRequest('http://localhost:3000/admin/deconnexion'))
     expect(location(res)).toBe('/admin/login?deconnexion=1')
     expect(cleared(res, 'admin_session')).toBe(true)
   })

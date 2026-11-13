@@ -5,11 +5,13 @@ import { eq } from 'drizzle-orm'
 import { requireTeacher } from '@/lib/auth/session'
 import { getDb } from '@/lib/db/client'
 import { activities } from '@/lib/db/schema'
-import { createActivity, getActivityDetail, replaceHelpVideos, setActivityLevels, updateActivity } from '@/lib/db/activities'
+import { createActivity, getActivityDetail, replaceHelpVideos, setActivityLevels, updateActivity, claimAnnouncements } from '@/lib/db/activities'
 import { saveStarter } from '@/lib/activities/starter'
 import { fetchCapytaleProject, parseCapytaleRef } from '@/lib/capytale/import'
 import { parseYoutubeId } from '@/lib/youtube'
 import { LEVELS, type Level } from '@/lib/levels'
+import { schedule } from '@/lib/push/schedule'
+import { notifyNewActivities } from '@/lib/push/events'
 
 export type ActivityFormState = { error?: string; success?: string } | null
 
@@ -55,6 +57,9 @@ export async function saveActivityAction(activityId: string, _prev: ActivityForm
   await updateActivity(db, activityId, { title, instructions: instructions || null, statementYoutubeId, status })
   await replaceHelpVideos(db, activityId, help)
   await setActivityLevels(db, activityId, levels)
+  // Une activité n'est annoncée qu'une fois (première publication) : réservation atomique, donc ni republication ni deux onglets n'annoncent deux fois.
+  const announced = await claimAnnouncements(db, [activityId])
+  if (announced.length) schedule(() => notifyNewActivities(db, announced))
   revalidatePath('/admin/activites')
   revalidatePath(`/admin/activites/${activityId}`)
   const warnings = [

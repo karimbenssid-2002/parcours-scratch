@@ -12,12 +12,16 @@ export type TeacherRequest = typeof teacherRequests.$inferSelect
  * même identité prenom.nom, quel que soit le domaine. L'index unique partiel « teacher_requests_one_pending », porté par
  * l'identité, tranche entre deux envois simultanés.
  */
-export async function createTeacherRequest(db: DB, email: string): Promise<'created' | 'duplicate'> {
+export async function createTeacherRequestId(db: DB, email: string): Promise<{ status: 'created'; id: string } | { status: 'duplicate' }> {
   const e = normalizeEmail(email)
-  if ((await findTeachersByIdentity(db, teacherIdentity(e), 1)).length) return 'duplicate'
+  if ((await findTeachersByIdentity(db, teacherIdentity(e), 1)).length) return { status: 'duplicate' }
   const inserted = await db.insert(teacherRequests).values({ email: e, ...namesFromEmail(e) }).onConflictDoNothing()
     .returning({ id: teacherRequests.id })
-  return inserted.length ? 'created' : 'duplicate'
+  return inserted.length ? { status: 'created', id: inserted[0].id } : { status: 'duplicate' }
+}
+
+export async function createTeacherRequest(db: DB, email: string): Promise<'created' | 'duplicate'> {
+  return (await createTeacherRequestId(db, email)).status
 }
 
 export async function listPendingRequests(db: DB): Promise<TeacherRequest[]> {

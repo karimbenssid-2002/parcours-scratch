@@ -79,6 +79,8 @@ export const activities = pgTable('activities', {
   instructions: text('instructions'),
   thumbnail: text('thumbnail'),
   status: text('status', { enum: ['draft', 'published'] }).notNull().default('draft'),
+  // Première publication annoncée aux enseignants (une activité n'est annoncée qu'une fois).
+  announcedAt: text('announced_at'),
   source: text('source', { enum: ['breizh', 'admin'] }).notNull().default('admin'),
   sourceRef: integer('source_ref').unique(),
   createdAt: nowIso('created_at'),
@@ -280,3 +282,14 @@ export const loginAttempts = pgTable('login_attempts', {
   key: text('key').notNull(),
   at: timestamp('at', { withTimezone: true }).notNull(),
 }, (t) => [index('login_attempts_key_at').on(t.key, t.at)]).enableRLS()
+
+/** Abonnements Web Push (un par appareil et par compte). Propriétaire polymorphe : pas de clé étrangère, nettoyé à l'envoi (404/410). */
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: id(),
+  ownerKind: text('owner_kind', { enum: ['student', 'teacher'] }).notNull(),
+  ownerId: text('owner_id').notNull(),
+  endpoint: text('endpoint').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: nowIso('created_at'),
+}, (t) => [uniqueIndex('push_subscriptions_owner_endpoint').on(t.ownerKind, t.ownerId, t.endpoint)]).enableRLS()

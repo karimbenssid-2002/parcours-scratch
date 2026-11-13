@@ -11,7 +11,7 @@ describe('schéma', () => {
     expect(names.sort()).toEqual([
       'activities', 'activity_autograde', 'activity_help_videos', 'app_settings', 'autograde_jobs', 'autograde_reference_runs', 'autograde_runner_calls', 'autograde_runs', 'autograde_usage',
       'class_activities', 'class_students', 'classes', 'deadline_extensions',
-      'late_notices', 'level_activities', 'login_attempts', 'progress', 'reviews', 'students', 'teacher_requests', 'teachers', 'theme_activities', 'themes',
+      'late_notices', 'level_activities', 'login_attempts', 'progress', 'push_subscriptions', 'reviews', 'students', 'teacher_requests', 'teachers', 'theme_activities', 'themes',
     ])
   })
 

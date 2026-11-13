@@ -59,19 +59,28 @@ function contentPath(rel: string): string {
   return rel
 }
 
+/** Colonnes absentes de la base locale, calculées à l'export (jamais annoncer au site en ligne un contenu qu'on y copie). */
+const DERIVED = new Set(['announced_at'])
+
 /** Lit une table de contenu (colonnes du schéma en ligne seulement) et convertit les valeurs SQLite. */
 function readTable(sqlite: Database.Database, name: string, table: PgTable): Row[] {
-  const columns = Object.entries(getTableColumns(table))
+  const all = Object.entries(getTableColumns(table))
+  const columns = all.filter(([, c]) => !DERIVED.has(c.name))
   const present = new Set((sqlite.prepare(`select name from pragma_table_info(?)`).all(name) as { name: string }[]).map((c) => c.name))
   if (present.size === 0) throw new Error(`Base locale : table ${name} absente.`)
   const absent = columns.map(([, c]) => c.name).filter((c) => !present.has(c))
   if (absent.length) throw new Error(`Base locale : colonne(s) ${absent.join(', ')} absente(s) de la table ${name}.`)
   const list = columns.map(([, c]) => `"${c.name}"`).join(', ')
   const raw = sqlite.prepare(`select ${list} from "${name}"`).all() as Row[]
-  return raw.map((r) => Object.fromEntries(columns.map(([key, c]) => {
-    const v = r[c.name]
-    return [key, c.dataType === 'boolean' && v !== null ? v === 1 : v] // booléens SQLite : 0/1
-  })))
+  return raw.map((r) => {
+    const row = Object.fromEntries(columns.map(([key, c]) => {
+      const v = r[c.name]
+      return [key, c.dataType === 'boolean' && v !== null ? v === 1 : v] // booléens SQLite : 0/1
+    }))
+    // Activité déjà publiée à l'export : considérée comme annoncée (aucune notification aux enseignants).
+    if (all.length !== columns.length && table === activities) row.announcedAt = row.status === 'published' ? row.createdAt : null
+    return row
+  })
 }
 
 /** Lit la base locale (lecture seule) et liste ce qui serait copié. N'écrit rien nulle part. */
@@ -128,7 +137,7 @@ export async function planExport(source: ExportSource): Promise<ExportPlan> {
 function updateSet(table: PgTable, pk: PgColumn[]) {
   const pkNames = new Set(pk.map((c) => c.name))
   return Object.fromEntries(Object.entries(getTableColumns(table))
-    .filter(([, c]) => !pkNames.has(c.name))
+    .filter(([, c]) => !pkNames.has(c.name) && !DERIVED.has(c.name)) // announced_at en ligne est conservé
     .map(([key, c]) => [key, sql.raw(`excluded."${c.name}"`)]))
 }
 

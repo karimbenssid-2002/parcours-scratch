@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, max } from 'drizzle-orm'
+import { and, asc, count, eq, inArray, isNull, max } from 'drizzle-orm'
 import type { DB } from './client'
 import { activities, activityHelpVideos, levelActivities } from './schema'
 import type { Level } from '@/lib/levels'
@@ -111,6 +111,15 @@ export async function createActivity(db: DB, input: { title: string }): Promise<
       .onConflictDoNothing({ target: activities.slug }).returning({ id: activities.id })
     if (row) return row
   }
+}
+
+/** Marque comme annoncées les activités publiées qui ne l'étaient pas encore ; renvoie celles qui viennent de l'être (une seule fois par activité, même à deux onglets). */
+export async function claimAnnouncements(db: DB, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return []
+  const rows = await db.update(activities).set({ announcedAt: new Date().toISOString() })
+    .where(and(inArray(activities.id, ids), eq(activities.status, 'published'), isNull(activities.announcedAt)))
+    .returning({ id: activities.id })
+  return rows.map((r) => r.id)
 }
 
 export async function updateActivity(

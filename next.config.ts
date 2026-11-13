@@ -47,6 +47,14 @@ const nextConfig: NextConfig = {
           { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self'" },
         ],
       },
+      {
+        source: '/sw-click.js',
+        headers: [
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
       // Éditeur Scratch. Fichiers sans empreinte (editor.html, scratch-gui-standalone.js, bibliothèques…) :
       // revérifiés à chaque chargement, pour qu'aucun navigateur ne garde une version périmée (réponse 304 si rien n'a changé).
       { source: '/scratch-editor/:path*', headers: cache('public, max-age=0, must-revalidate') },

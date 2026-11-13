@@ -4,6 +4,8 @@ import { Bot, ChevronRight, Clapperboard, GraduationCap, Inbox, ListOrdered, Log
 import { requireTeacher } from '@/lib/auth/session'
 import { getDb } from '@/lib/db/client'
 import { countPendingRequests } from '@/lib/db/teacher-requests'
+import { NotificationsToggle } from '@/components/pwa/NotificationsToggle'
+import { pushEnabled, vapidPublicKey } from '@/lib/push/config'
 
 export const metadata = { title: 'Plus' }
 
@@ -22,6 +24,7 @@ export default async function MorePage() {
   const teacher = await requireTeacher()
   const pending = teacher.role === 'admin' ? await countPendingRequests(getDb()) : 0
   const name = `${teacher.firstName} ${teacher.lastName}`
+  const publicKey = pushEnabled() ? vapidPublicKey() : null
   const row = 'flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 hover:bg-primary-wash/50'
   const tile = 'grid size-9 shrink-0 place-items-center rounded-[10px] bg-primary-wash text-primary-ink'
   return (
@@ -32,6 +35,7 @@ export default async function MorePage() {
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">{name}</p>
           <p className="text-sm text-muted">{teacher.role === 'admin' ? 'Administrateur' : 'Enseignant'}</p>
+          {publicKey && <NotificationsToggle app="admin" publicKey={publicKey} />}
         </div>
         <Image src="/brand/lycee-malraux.png" alt="Lycée Français International André-Malraux" width={81} height={30} style={{ height: 30, width: 'auto' }} />
       </section>

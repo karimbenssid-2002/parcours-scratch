@@ -5,6 +5,7 @@ import { findTeacherById } from '@/lib/db/teachers'
 import { devLoginEnabled } from '@/lib/auth/dev-login'
 import { setSessionCookie } from '@/lib/auth/google-flow'
 import { openStudentAccount, openTeacherAccount } from '@/lib/auth/google-login'
+import { dropForeignDeviceSubscription } from '@/lib/push/device'
 import { loginPath } from '@/lib/auth/login-errors'
 import { adminSessionCookie, studentSessionCookie } from '@/lib/auth/session'
 
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
     if (!student) return go(loginPath('eleve'))
     const res = go('/')
     setSessionCookie(res, await studentSessionCookie(await openStudentAccount(db, student)))
+    await dropForeignDeviceSubscription(request, res, 'eleve', { kind: 'student', id: student.id })
     return res
   }
   if (kind === 'enseignant') {
@@ -35,6 +37,7 @@ export async function POST(request: NextRequest) {
     if (!teacher || !teacher.isActive) return go(loginPath('enseignant'))
     const res = go('/admin')
     setSessionCookie(res, await adminSessionCookie(await openTeacherAccount(db, teacher)))
+    await dropForeignDeviceSubscription(request, res, 'admin', { kind: 'teacher', id: teacher.id })
     return res
   }
   return go(loginPath('eleve'))
