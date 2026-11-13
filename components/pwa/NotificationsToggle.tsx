@@ -32,13 +32,19 @@ async function readSnapshot(publicKey: string, endpoint: string): Promise<Snapsh
   return { supported: true, permission: Notification.permission, subscribed, serverKnows }
 }
 
+/** Code court pour le diagnostic : étape + nom de l'erreur (ex. « abonnement · AbortError », « serveur · HTTP 400 »). */
+function errorCode(step: string, error: unknown): string {
+  const detail = error instanceof DOMException ? `${error.name} ${error.message}` : error instanceof Error ? error.message : 'inconnue'
+  return `${step} · ${detail}`.slice(0, 120)
+}
+
 /** Active ou coupe les notifications de cet appareil. N'apparaît que dans l'appli installée (écran d'accueil) et si le
  *  navigateur sait recevoir des notifications ; la permission n'est demandée qu'au toucher du bouton. */
 export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'; publicKey: string }) {
   const [snap, setSnap] = useState<Snapshot | null>(null)
   const [standalone, setStandalone] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
   const endpoint = `/api/notifications/abonnement?app=${app}`
 
   useEffect(() => {
@@ -58,12 +64,15 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
   if (state === 'hidden') return null
 
   async function enable() {
-    setBusy(true); setFailed(false)
+    setBusy(true); setFailed(null)
+    let step = 'permission' // étape en cours, affichée en petit avec l'erreur pour le diagnostic
     try {
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') { setSnap((s) => s && { ...s, permission }); return }
+      step = 'sw'
       const registration = await navigator.serviceWorker.ready
       const key = keyToBytes(publicKey)
+      step = 'abonnement'
       let subscription = await registration.pushManager.getSubscription()
       // Abonnement fait avec une autre clé VAPID : inutilisable, on le remplace.
       if (subscription && !sameKey(subscription.options.applicationServerKey, key)) {
@@ -71,27 +80,28 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
         subscription = null
       }
       subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key })
+      step = 'serveur'
       const res = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(subscription) })
-      if (!res.ok) { await subscription.unsubscribe().catch(() => {}); throw new Error('abonnement refusé') }
+      if (!res.ok) { await subscription.unsubscribe().catch(() => {}); throw new Error(`HTTP ${res.status}`) }
       setSnap({ supported: true, permission, subscribed: true, serverKnows: true })
-    } catch {
-      setFailed(true)
+    } catch (error) {
+      setFailed(errorCode(step, error))
     } finally {
       setBusy(false)
     }
   }
 
   async function disable() {
-    setBusy(true); setFailed(false)
+    setBusy(true); setFailed(null)
     try {
       const registration = await navigator.serviceWorker.ready
       const subscription = await registration.pushManager.getSubscription()
       await subscription?.unsubscribe()
       const res = await fetch(endpoint, { method: 'DELETE' })
-      if (!res.ok) throw new Error('désabonnement refusé')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setSnap((s) => s && { ...s, subscribed: false, serverKnows: false })
-    } catch {
-      setFailed(true)
+    } catch (error) {
+      setFailed(errorCode('desabonnement', error))
     } finally {
       setBusy(false)
     }
@@ -107,7 +117,11 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
         <p className="text-muted">Notifications activées · <button type="button" onClick={disable} disabled={busy} className={link}>Désactiver</button></p>
       )}
       {state === 'denied' && <p className="text-muted">{COPY[app].denied}</p>}
-      {failed && <p role="alert" className="mt-1 text-st-bad">{COPY[app].error}</p>}
+      {failed && (
+        <p role="alert" className="mt-1 text-st-bad">
+          {COPY[app].error} <span className="block text-xs opacity-80">Code : {failed}</span>
+        </p>
+      )}
     </div>
   )
 }

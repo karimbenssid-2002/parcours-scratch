@@ -17,6 +17,11 @@ const bodySchema = z.object({
   keys: z.object({ p256dh: b64url, auth: b64url }),
 })
 
+function pushHost(value: unknown): string {
+  const endpoint = (value as { endpoint?: unknown } | null)?.endpoint
+  try { return typeof endpoint === 'string' ? new URL(endpoint).hostname.slice(0, 100) : 'absent' } catch { return 'invalide' }
+}
+
 const COOKIE_MAX_AGE = 365 * 24 * 3600
 const json = (error: string, status: number) => NextResponse.json({ error }, { status })
 const cookieOptions = (maxAge: number) =>
@@ -63,7 +68,12 @@ export async function POST(request: Request) {
   let parsed: unknown
   try { parsed = JSON.parse(new TextDecoder().decode(raw)) } catch { return json('Abonnement invalide.', 400) }
   const body = bodySchema.safeParse(parsed)
-  if (!body.success) return json('Abonnement invalide.', 400)
+  if (!body.success) {
+    // Diagnostic sans donnée personnelle : champs en cause et nom d'hôte du service push.
+    const fields = [...new Set(body.error.issues.map((i) => i.path.join('.')))].join(',')
+    console.warn(`[notifications] abonnement refusé : champs=${fields} hôte=${pushHost(parsed)}`)
+    return json('Abonnement invalide.', 400)
+  }
   const id = await saveSubscription(getDb(), who.owner, { endpoint: body.data.endpoint, keys: body.data.keys })
   const res = NextResponse.json({ ok: true }, { status: 201 })
   res.cookies.set(cookieName(who.app), id, cookieOptions(COOKIE_MAX_AGE))
