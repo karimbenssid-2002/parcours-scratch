@@ -5,16 +5,16 @@ import { GoogleButton } from '@/components/auth/GoogleButton'
 import { Alert } from '@/components/ui/Alert'
 import { getDb } from '@/lib/db/client'
 import { devLoginEnabled, listDevStudents } from '@/lib/auth/dev-login'
-import { loginErrorMessage, logoutHint } from '@/lib/auth/login-errors'
+import { idleHint, loginErrorMessage, logoutHint } from '@/lib/auth/login-errors'
 
 export const metadata = { title: 'Connexion' }
 
 export default async function StudentLoginPage({ searchParams }: {
-  searchParams: Promise<{ erreur?: string | string[]; deconnexion?: string | string[] }>
+  searchParams: Promise<{ erreur?: string | string[]; deconnexion?: string | string[]; inactivite?: string | string[] }>
 }) {
-  const { erreur, deconnexion } = await searchParams
+  const { erreur, deconnexion, inactivite } = await searchParams
   const error = loginErrorMessage('eleve', erreur)
-  const hint = logoutHint('eleve', deconnexion)
+  const hint = idleHint('eleve', inactivite) ?? logoutHint('eleve', deconnexion)
   const dev = devLoginEnabled()
   return (
     <AuthShell area="eleve" title="Bienvenue !" subtitle="Connecte-toi avec ton compte Google du collège.">

@@ -7,6 +7,7 @@ import { countUnseenNotices } from '@/lib/deadlines/notices'
 import { AdminNav } from '@/components/layout/AdminNav'
 import { AdminMobileNav } from '@/components/layout/AdminMobileNav'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
+import { AppSessionKeeper } from '@/components/pwa/AppSessionKeeper'
 import { SourceLink } from '@/components/layout/SourceLink'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const pendingReviews = (await countReviewQueue(db, teacher.id)) + (await countUnseenNotices(db, teacher.id))
   return (
     <div data-area="admin" className="md:flex">
+      <AppSessionKeeper app="admin" />
       <AdminNav role={teacher.role} name={`${teacher.firstName} ${teacher.lastName}`} pendingRequests={pending} pendingReviews={pendingReviews} />
       <AdminMobileNav pendingReviews={pendingReviews} pendingRequests={pending} />
       <main className="min-w-0 flex-1 px-3.5 pb-28 pt-5 sm:px-8 md:py-8 lg:px-11"><InstallPrompt audience="prof" />{children}

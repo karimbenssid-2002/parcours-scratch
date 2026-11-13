@@ -8,12 +8,14 @@ import { findStudentById, type Student } from '@/lib/db/students'
 import { isEmailInAnyClass } from '@/lib/db/classes'
 import { teacherGate } from './access'
 
-const base = () => ({ httpOnly: true as const, sameSite: 'strict' as const, secure: process.env.NODE_ENV === 'production', path: '/' })
+// Lax et non Strict : l'appli installée s'ouvre depuis l'écran d'accueil comme une arrivée extérieure au site ; en
+// Strict, le cookie n'y était pas envoyé et l'écran de connexion s'affichait jusqu'au premier rafraîchissement.
+const base = () => ({ httpOnly: true as const, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', path: '/' })
 
 /** Cookie de session prêt à poser, sur `cookies()` ou sur une réponse de route (retour de Google). */
 export type SessionCookie = {
   name: string; value: string
-  options: { httpOnly: true; sameSite: 'strict'; secure: boolean; path: string; maxAge: number }
+  options: { httpOnly: true; sameSite: 'lax'; secure: boolean; path: string; maxAge: number }
 }
 
 export async function adminSessionCookie(t: Teacher): Promise<SessionCookie> {

@@ -5,16 +5,16 @@ import { GoogleButton } from '@/components/auth/GoogleButton'
 import { Alert } from '@/components/ui/Alert'
 import { getDb } from '@/lib/db/client'
 import { devLoginEnabled, listDevTeachers } from '@/lib/auth/dev-login'
-import { loginErrorMessage, logoutHint } from '@/lib/auth/login-errors'
+import { idleHint, loginErrorMessage, logoutHint } from '@/lib/auth/login-errors'
 
 export const metadata = { title: 'Connexion enseignant' }
 
 export default async function AdminLoginPage({ searchParams }: {
-  searchParams: Promise<{ erreur?: string | string[]; deconnexion?: string | string[] }>
+  searchParams: Promise<{ erreur?: string | string[]; deconnexion?: string | string[]; inactivite?: string | string[] }>
 }) {
-  const { erreur, deconnexion } = await searchParams
+  const { erreur, deconnexion, inactivite } = await searchParams
   const error = loginErrorMessage('enseignant', erreur)
-  const hint = logoutHint('enseignant', deconnexion)
+  const hint = idleHint('enseignant', inactivite) ?? logoutHint('enseignant', deconnexion)
   const dev = devLoginEnabled()
   return (
     <AuthShell area="admin" title="Connexion" subtitle="Accès réservé aux enseignants de l'établissement.">

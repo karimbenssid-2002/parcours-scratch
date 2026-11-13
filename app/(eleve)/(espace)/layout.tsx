@@ -4,6 +4,7 @@ import { readTheme } from '@/lib/ui/theme-server'
 import { StudentNav } from '@/components/layout/StudentNav'
 import { StudentTabBar } from '@/components/layout/StudentTabBar'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
+import { AppSessionKeeper } from '@/components/pwa/AppSessionKeeper'
 import { SourceLink } from '@/components/layout/SourceLink'
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
@@ -12,6 +13,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const theme = await readTheme()
   return (
     <div data-area="eleve" data-theme={theme}>
+      <AppSessionKeeper app="eleve" />
       <StudentNav firstName={student.firstName} theme={theme} />
       <div className="flex min-h-[calc(100dvh-4rem)] flex-col px-3.5 pb-28 pt-5 md:px-8 md:pb-8 md:pt-8">
         <InstallPrompt />

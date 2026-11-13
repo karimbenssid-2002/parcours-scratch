@@ -39,6 +39,14 @@ export function loginPath(kind: LoginKind, error?: LoginError): string {
 }
 
 /** Rappel pour ordinateur partagé, seulement après une déconnexion (`?deconnexion=1`, posé par les routes de déconnexion). */
+/** Appli installée fermée plus de 5 minutes : la session a été fermée (voir lib/auth/app-idle.ts). */
+export function idleHint(kind: LoginKind, flag: unknown): string | null {
+  if (flag !== '1') return null
+  return kind === 'eleve'
+    ? 'L’appli était fermée depuis plus de 5 minutes : reconnecte-toi.'
+    : 'L’appli était fermée depuis plus de 5 minutes : reconnectez-vous.'
+}
+
 export function logoutHint(kind: LoginKind, flag: unknown): string | null {
   if (flag !== '1') return null
   return kind === 'eleve'
