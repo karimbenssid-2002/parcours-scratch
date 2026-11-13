@@ -2,16 +2,20 @@
 import { useEffect, useState } from 'react'
 import { isStandalone } from '@/lib/pwa/install'
 import { appRegistration } from '@/lib/pwa/registration'
-import { keyToBytes, sameKey, toggleState, type ToggleState } from '@/lib/pwa/notifications'
+import { chromeIntentUrl, keyToBytes, needsChromeFallback, sameKey, toggleState, type ToggleState } from '@/lib/pwa/notifications'
 
 const COPY = {
   admin: {
     denied: 'Notifications bloquées : autorisez-les dans les réglages du téléphone.',
     error: 'Impossible de modifier les notifications pour le moment. Réessayez.',
+    fallback: 'Sur ce téléphone, l’activation se fait depuis Chrome :',
+    back: 'C’est fait : vous pouvez revenir dans l’appli.',
   },
   eleve: {
     denied: 'Notifications bloquées : autorise-les dans les réglages du téléphone.',
     error: 'Impossible de modifier les notifications pour le moment. Réessaie.',
+    fallback: 'Sur ce téléphone, l’activation se fait depuis Chrome :',
+    back: 'C’est fait : tu peux revenir dans l’appli.',
   },
 } as const
 
@@ -46,14 +50,18 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
   const [standalone, setStandalone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
+  const [viaChrome, setViaChrome] = useState(false) // appli installée Android qui ne peut pas s'abonner elle-même
+  const [fromApp, setFromApp] = useState(false) // onglet Chrome ouvert depuis l'appli pour activer
   const endpoint = `/api/notifications/abonnement?app=${app}`
 
   useEffect(() => {
-    // Diagnostic temporaire : ?notifs=test affiche aussi le bouton dans un onglet ordinaire.
-    if (!isStandalone() && new URLSearchParams(location.search).get('notifs') !== 'test') return
+    // ?notifs=chrome (lien « Ouvrir dans Chrome » de l'appli) ou ?notifs=test : bouton aussi dans un onglet ordinaire.
+    const param = new URLSearchParams(location.search).get('notifs')
+    if (!isStandalone() && param !== 'chrome' && param !== 'test') return
+    const opened = param === 'chrome'
     let cancelled = false
     const refresh = () => {
-      void readSnapshot(app, publicKey, endpoint).then((s) => { if (!cancelled) { setStandalone(true); setSnap(s) } }).catch(() => {})
+      void readSnapshot(app, publicKey, endpoint).then((s) => { if (!cancelled) { setStandalone(true); setFromApp(opened); setSnap(s) } }).catch(() => {})
     }
     refresh()
     // Retour dans l'appli : la permission ou l'abonnement ont pu changer (réglages du téléphone, autre session).
@@ -87,7 +95,9 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
       if (!res.ok) { await subscription.unsubscribe().catch(() => {}); throw new Error(`HTTP ${res.status}`) }
       setSnap({ supported: true, permission, subscribed: true, serverKnows: true })
     } catch (error) {
-      setFailed(errorCode(step, error))
+      const errorName = error instanceof DOMException ? error.name : null
+      if (needsChromeFallback({ step, errorName, standalone: isStandalone(), userAgent: navigator.userAgent })) setViaChrome(true)
+      else setFailed(errorCode(step, error))
     } finally {
       setBusy(false)
     }
@@ -112,12 +122,16 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
   const link = 'font-semibold text-primary-ink underline underline-offset-2 disabled:opacity-60'
   return (
     <div className="mt-1 text-sm">
-      {state === 'offer' && (
+      {state === 'offer' && !viaChrome && (
         <button type="button" onClick={enable} disabled={busy} className={link}>Activer les notifications</button>
+      )}
+      {state === 'offer' && viaChrome && (
+        <p className="text-muted">{COPY[app].fallback} <a href={chromeIntentUrl(location.host, location.pathname)} className={link}>Ouvrir dans Chrome</a></p>
       )}
       {state === 'on' && (
         <p className="text-muted">Notifications activées · <button type="button" onClick={disable} disabled={busy} className={link}>Désactiver</button></p>
       )}
+      {state === 'on' && fromApp && <p className="mt-1 font-semibold text-st-good">{COPY[app].back}</p>}
       {state === 'denied' && <p className="text-muted">{COPY[app].denied}</p>}
       {failed && (
         <p role="alert" className="mt-1 text-st-bad">

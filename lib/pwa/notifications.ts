@@ -25,3 +25,14 @@ export function sameKey(subscriptionKey: ArrayBuffer | null | undefined, current
   const a = new Uint8Array(subscriptionKey)
   return a.every((v, i) => v === current[i])
 }
+
+/** Android : Chrome refuse parfois l'abonnement demandé depuis l'appli installée (AbortError « push service error »)
+ *  alors qu'il l'accepte dans un onglet ; l'abonnement fait dans Chrome sert ensuite aussi à l'appli. */
+export function needsChromeFallback(input: { step: string; errorName: string | null; standalone: boolean; userAgent: string }): boolean {
+  return input.step === 'abonnement' && input.errorName === 'AbortError' && input.standalone && /Android/i.test(input.userAgent)
+}
+
+/** Lien qui ouvre la page dans Chrome lui-même (hors de l'appli installée), avec le bouton affiché. */
+export function chromeIntentUrl(host: string, pathname: string): string {
+  return `intent://${host}${pathname}?notifs=chrome#Intent;scheme=https;package=com.android.chrome;end`
+}
