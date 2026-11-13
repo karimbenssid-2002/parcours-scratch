@@ -12,7 +12,7 @@ export function AuthShell({ area, title, subtitle, children }: {
         <div aria-hidden className="-mx-7 mb-6 h-2 bg-nav" />
         {/* Logo du lycée centré ; Modulo à gauche dans une colonne symétrique (sur mobile : au-dessus). */}
         <div className="flex flex-col items-center gap-3 sm:grid sm:grid-cols-[1fr_auto_1fr]">
-          <Modulo size={56} className="sm:justify-self-start" />
+          <Modulo size={56} variant={area === 'admin' ? 'prof' : 'eleve'} className="sm:justify-self-start" />
           <SchoolLogo height={72} />
         </div>
         <div className="text-center">
