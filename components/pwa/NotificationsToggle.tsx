@@ -49,7 +49,8 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
   const endpoint = `/api/notifications/abonnement?app=${app}`
 
   useEffect(() => {
-    if (!isStandalone()) return
+    // Diagnostic temporaire : ?notifs=test affiche aussi le bouton dans un onglet ordinaire.
+    if (!isStandalone() && new URLSearchParams(location.search).get('notifs') !== 'test') return
     let cancelled = false
     const refresh = () => {
       void readSnapshot(app, publicKey, endpoint).then((s) => { if (!cancelled) { setStandalone(true); setSnap(s) } }).catch(() => {})
