@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { isStandalone } from '@/lib/pwa/install'
+import { appRegistration } from '@/lib/pwa/registration'
 import { keyToBytes, sameKey, toggleState, type ToggleState } from '@/lib/pwa/notifications'
 
 const COPY = {
@@ -17,9 +18,9 @@ const COPY = {
 type Snapshot = { supported: boolean; permission: NotificationPermission; subscribed: boolean; serverKnows: boolean }
 
 /** État réel : abonnement du navigateur (avec la clé actuelle) et, s'il existe, confirmation du serveur pour ce compte. */
-async function readSnapshot(publicKey: string, endpoint: string): Promise<Snapshot | null> {
+async function readSnapshot(app: 'admin' | 'eleve', publicKey: string, endpoint: string): Promise<Snapshot | null> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return null
-  const registration = await navigator.serviceWorker.ready
+  const registration = await appRegistration(app)
   const sub = await registration.pushManager.getSubscription()
   const subscribed = sub !== null && sameKey(sub.options.applicationServerKey, keyToBytes(publicKey))
   let serverKnows = false
@@ -51,14 +52,14 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
     if (!isStandalone()) return
     let cancelled = false
     const refresh = () => {
-      void readSnapshot(publicKey, endpoint).then((s) => { if (!cancelled) { setStandalone(true); setSnap(s) } }).catch(() => {})
+      void readSnapshot(app, publicKey, endpoint).then((s) => { if (!cancelled) { setStandalone(true); setSnap(s) } }).catch(() => {})
     }
     refresh()
     // Retour dans l'appli : la permission ou l'abonnement ont pu changer (réglages du téléphone, autre session).
     const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
     document.addEventListener('visibilitychange', onVisible)
     return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible) }
-  }, [publicKey, endpoint])
+  }, [app, publicKey, endpoint])
 
   const state: ToggleState = snap ? toggleState({ standalone, ...snap }) : 'hidden'
   if (state === 'hidden') return null
@@ -70,7 +71,7 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') { setSnap((s) => s && { ...s, permission }); return }
       step = 'sw'
-      const registration = await navigator.serviceWorker.ready
+      const registration = await appRegistration(app)
       const key = keyToBytes(publicKey)
       step = 'abonnement'
       let subscription = await registration.pushManager.getSubscription()
@@ -94,7 +95,7 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
   async function disable() {
     setBusy(true); setFailed(null)
     try {
-      const registration = await navigator.serviceWorker.ready
+      const registration = await appRegistration(app)
       const subscription = await registration.pushManager.getSubscription()
       await subscription?.unsubscribe()
       const res = await fetch(endpoint, { method: 'DELETE' })

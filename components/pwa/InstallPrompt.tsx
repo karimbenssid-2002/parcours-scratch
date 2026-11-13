@@ -3,6 +3,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import Image from 'next/image'
 import { EllipsisVertical, Share, SquarePlus, X } from 'lucide-react'
 import { detectPlatform, isStandalone, later as laterThisTime, markInstalled, shouldOffer, type Platform } from '@/lib/pwa/install'
+import { swScope } from '@/lib/pwa/registration'
 
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
 
@@ -42,7 +43,7 @@ export function InstallPrompt({ audience = 'eleve' }: { audience?: 'eleve' | 'pr
   const [waited, setWaited] = useState(false)
 
   useEffect(() => {
-    if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {})
+    if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js', { scope: swScope(audience === 'prof' ? 'admin' : 'eleve') }).catch(() => {})
     const onPrompt = (e: Event) => { e.preventDefault(); setDeferred(e as InstallEvent) }
     const onInstalled = () => { markInstalled(localStorage, Date.now()); setClosed(true) }
     window.addEventListener('beforeinstallprompt', onPrompt)
@@ -53,7 +54,7 @@ export function InstallPrompt({ audience = 'eleve' }: { audience?: 'eleve' | 'pr
       window.removeEventListener('beforeinstallprompt', onPrompt)
       window.removeEventListener('appinstalled', onInstalled)
     }
-  }, [])
+  }, [audience])
 
   const platform = closed ? null : offered
   if (!platform) return null
