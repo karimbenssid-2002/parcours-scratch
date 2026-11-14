@@ -19,6 +19,8 @@ import { NextDeadlineCard } from '@/components/eleve/NextDeadlineCard'
 import { StatusBadge } from '@/components/eleve/StatusBadge'
 import { TeacherInk } from '@/components/eleve/TeacherNote'
 import { ensureClosed } from '@/lib/deadlines/ensure'
+import { NotificationsToggle } from '@/components/pwa/NotificationsToggle'
+import { pushEnabled, vapidPublicKey } from '@/lib/push/config'
 
 export const metadata = { title: 'Mes défis' }
 
@@ -45,6 +47,7 @@ export default async function StudentHome() {
   const stepNote = step && recent.find((r) => r.activityId === step.item.activityId)
   const levels = levelsLabel(classes.map((c) => c.level))
   const numbers = new Map(items.map((i) => [i.activityId, i.number]))
+  const publicKey = pushEnabled() ? vapidPublicKey() : null
 
   return (
     <div className="space-y-6">
@@ -74,6 +77,8 @@ export default async function StudentHome() {
           </div>
         )}
       </header>
+
+      {publicKey && <NotificationsToggle app="eleve" publicKey={publicKey} variant="accueil" />}
 
       {items.length === 0 ? (
         <div className="glass p-8 text-center">

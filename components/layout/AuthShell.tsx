@@ -1,6 +1,5 @@
 import { Modulo } from './Modulo'
 import { SchoolLogo } from './SchoolLogo'
-import { SourceLink } from './SourceLink'
 
 // Pas de data-area ici : les layouts (auth) le posent déjà, avec le thème choisi par l'élève.
 export function AuthShell({ area, title, subtitle, children }: {
@@ -25,7 +24,6 @@ export function AuthShell({ area, title, subtitle, children }: {
         </div>
         <div>{children}</div>
       </div>
-      <SourceLink />
     </main>
   )
 }

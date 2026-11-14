@@ -5,7 +5,6 @@ import { StudentNav } from '@/components/layout/StudentNav'
 import { StudentTabBar } from '@/components/layout/StudentTabBar'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { AppSessionKeeper } from '@/components/pwa/AppSessionKeeper'
-import { SourceLink } from '@/components/layout/SourceLink'
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const student = await requireStudent()
@@ -20,7 +19,6 @@ export default async function StudentLayout({ children }: { children: React.Reac
         <main className="mx-auto w-full max-w-7xl flex-1">{children}</main>
         <footer className="mx-auto mt-10 w-full max-w-7xl text-center text-sm text-muted">
           Chaque bloc compte. Continue !
-          <SourceLink className="mt-2" />
         </footer>
       </div>
       <StudentTabBar />

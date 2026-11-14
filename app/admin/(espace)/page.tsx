@@ -13,6 +13,9 @@ import { STATUS_LABELS } from '@/lib/progress/rules'
 import { levelTone } from '@/lib/ui/scratch-colors'
 import { LateNotices } from './LateNotices'
 import { ensureClosed } from '@/lib/deadlines/ensure'
+import { NotificationsToggle } from '@/components/pwa/NotificationsToggle'
+import { SourceLink } from '@/components/layout/SourceLink'
+import { pushEnabled, vapidPublicKey } from '@/lib/push/config'
 
 export const metadata = { title: 'Tableau de bord' }
 
@@ -31,6 +34,7 @@ export default async function AdminHome() {
   const classes = await listClassesForTeacher(db, teacher.id)
   const pendingOf = new Map((await pendingByClass(db, teacher.id)).map((c) => [c.classId, c.pending]))
   const notices = await listUnseenNotices(db, teacher.id)
+  const publicKey = pushEnabled() ? vapidPublicKey() : null
   return (
     <div className="mx-auto max-w-7xl space-y-7">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -45,6 +49,8 @@ export default async function AdminHome() {
           <Image src="/brand/lycee-malraux.png" alt="Lycée Français International André-Malraux" width={98} height={36} style={{ height: 36, width: 'auto' }} />
         </span>
       </header>
+
+      {publicKey && <NotificationsToggle app="admin" publicKey={publicKey} variant="accueil" />}
 
       <LateNotices notices={notices} />
 
@@ -164,6 +170,8 @@ export default async function AdminHome() {
           </ul>
         )}
       </section>
+
+      <footer className="pt-3"><SourceLink /></footer>
     </div>
   )
 }

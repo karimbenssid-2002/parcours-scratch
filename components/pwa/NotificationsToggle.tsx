@@ -1,5 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { BellRing } from 'lucide-react'
+import { buttonClasses } from '@/components/ui/Button'
 import { isStandalone } from '@/lib/pwa/install'
 import { appRegistration } from '@/lib/pwa/registration'
 import { chromeIntentUrl, keyToBytes, needsChromeFallback, sameKey, toggleState, type ToggleState } from '@/lib/pwa/notifications'
@@ -44,9 +46,11 @@ function errorCode(step: string, error: unknown): string {
 }
 
 /** Active ou coupe les notifications de cet appareil. N'apparaît que dans l'appli installée (écran d'accueil) et si le
- *  navigateur sait recevoir des notifications ; la permission n'est demandée qu'au toucher du bouton. */
-export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'; publicKey: string }) {
+ *  navigateur sait recevoir des notifications ; la permission n'est demandée qu'au toucher du bouton.
+ *  Variante « accueil » : gros bouton rouge tant que les notifications ne sont pas activées, rien une fois activées. */
+export function NotificationsToggle({ app, publicKey, variant = 'reglage' }: { app: 'admin' | 'eleve'; publicKey: string; variant?: 'reglage' | 'accueil' }) {
   const [snap, setSnap] = useState<Snapshot | null>(null)
+  const [tried, setTried] = useState(false) // bouton touché alors que les notifications sont bloquées
   const [standalone, setStandalone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
@@ -120,6 +124,30 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
   }
 
   const link = 'font-semibold text-primary-ink underline underline-offset-2 disabled:opacity-60'
+  const errorLine = failed && (
+    <p role="alert" className="mt-1 text-st-bad">
+      {COPY[app].error} <span className="block text-xs opacity-80">Code : {failed}</span>
+    </p>
+  )
+
+  if (variant === 'accueil') {
+    if (state === 'on') return fromApp ? <p className="text-sm font-semibold text-st-good">{COPY[app].back}</p> : null
+    return (
+      <div className="text-sm">
+        {viaChrome ? (
+          <p className="text-muted">{COPY[app].fallback} <a href={chromeIntentUrl(location.host, location.pathname)} className={link}>Ouvrir dans Chrome</a></p>
+        ) : (
+          <button type="button" onClick={state === 'denied' ? () => setTried(true) : enable} disabled={busy}
+            className={buttonClasses('danger', 'w-full sm:w-auto')}>
+            <BellRing className="size-[18px]" aria-hidden />Activer les notifications
+          </button>
+        )}
+        {state === 'denied' && tried && <p role="alert" className="mt-2 text-st-bad">{COPY[app].denied}</p>}
+        {errorLine}
+      </div>
+    )
+  }
+
   return (
     <div className="mt-1 text-sm">
       {state === 'offer' && !viaChrome && (
@@ -133,11 +161,7 @@ export function NotificationsToggle({ app, publicKey }: { app: 'admin' | 'eleve'
       )}
       {state === 'on' && fromApp && <p className="mt-1 font-semibold text-st-good">{COPY[app].back}</p>}
       {state === 'denied' && <p className="text-muted">{COPY[app].denied}</p>}
-      {failed && (
-        <p role="alert" className="mt-1 text-st-bad">
-          {COPY[app].error} <span className="block text-xs opacity-80">Code : {failed}</span>
-        </p>
-      )}
+      {errorLine}
     </div>
   )
 }

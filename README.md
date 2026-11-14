@@ -43,7 +43,7 @@ Toutes sont décrites dans [`.env.example`](.env.example).
 | `AUTOGRADE_RELAUNCH_SECRET` | Avec la correction automatique : secret du site (32 caractères minimum, distinct des autres) de la route `/api/correction/continuer`, par laquelle une fonction relance la suite de la file. Obligatoire sur Vercel (sinon la correction automatique reste désactivée). Chaque fonction prend des copies pendant 150 s puis relance la suite ; une copie qui dure plus de ~2 min 30 risque d'être coupée (reprise ensuite, au plus deux tentatives) |
 | `AUTOGRADE_SITE_URL` | Adresse du site (`https://…`, sans chemin) où envoyer la relance ; sur Vercel, le domaine de production par défaut. Jamais déduite de la requête en ligne |
 | `ANTHROPIC_API_KEY` | Propositions de note par l'IA pour la correction automatique (facultatif) |
-| `NEXT_PUBLIC_SOURCE_URL` | Adresse du dépôt public, pour le lien « Code source » du pied de page |
+| `NEXT_PUBLIC_SOURCE_URL` | Adresse du dépôt public, pour le lien « Code source » de l'accueil enseignant |
 | `EXPORT_SQLITE_FILE`, `EXPORT_STORAGE_DIR` | Source de `npm run export:contenu` (voir plus bas) |
 
 ## Éditeur Scratch

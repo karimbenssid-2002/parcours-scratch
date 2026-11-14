@@ -1,6 +1,6 @@
 import { LICENCE, SOURCE_URL } from '@/lib/source'
 
-/** Lien discret vers le code source du site (obligation de la licence AGPL-3.0). */
+/** Lien discret vers le code source du site (licence AGPL-3.0) : affiché sur l'accueil enseignant uniquement. */
 export function SourceLink({ className = '' }: { className?: string }) {
   return (
     <p className={`text-center text-xs text-muted ${className}`}>
