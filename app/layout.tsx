@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Kalam, Lexend } from 'next/font/google'
+import { connection } from 'next/server'
 import './globals.css'
 
 const lexend = Lexend({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-lexend' })
@@ -22,7 +23,10 @@ export const viewport: Viewport = {
   viewportFit: 'cover', // barre d'onglets au-dessus de la zone du geste d'accueil (iPhone)
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Toutes les pages rendues à la requête : Next ne pose le nonce de la CSP (proxy.ts) sur ses scripts qu'au rendu ; une
+  // page statique, bâtie sans requête, n'en aurait aucun et ses scripts seraient bloqués.
+  await connection()
   return (
     <html lang="fr" className={`${lexend.variable} ${kalam.variable}`}>
       <body className="min-h-dvh antialiased">{children}</body>

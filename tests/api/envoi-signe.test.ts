@@ -68,6 +68,7 @@ function memoryBucket() {
       return f ? { data: new Blob([new Uint8Array(f)]), error: null } : { data: null, error: Object.assign(new Error('Object not found'), { statusCode: '404' }) }
     },
     remove: async (ps) => (ps.forEach((p) => files.delete(p)), { data: [], error: null }),
+    list: async () => ({ data: [], error: null }),
     createSignedUploadUrl: async (p, options) => (signed.push(p), upsert.set(p, options.upsert), { data: { signedUrl: `https://sb.test/storage/v1/object/upload/sign/parcours/${p}?token=tk`, token: 'tk', path: p }, error: null }),
   }
   return { files, signed, downloads, client, browserPut }

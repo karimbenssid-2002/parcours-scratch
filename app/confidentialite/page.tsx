@@ -12,7 +12,7 @@ function Contact() {
     ? <a className="font-semibold text-primary-ink underline" href={`mailto:${CONTACT}`}>{CONTACT}</a>
     : <>l’administrateur du site, par l’intermédiaire d’un enseignant</>
 }
-const MISE_A_JOUR = '11 novembre 2026'
+const MISE_A_JOUR = '19 novembre 2026'
 
 /** Règles de confidentialité : publique (lue aussi par Google pour l'écran de connexion). */
 export default async function ConfidentialitePage() {
@@ -66,6 +66,15 @@ export default async function ConfidentialitePage() {
             La base de données et les projets sont hébergés par Supabase, sur des serveurs situés à Paris. Le site lui-même est
             servi par Vercel, depuis des serveurs situés à Paris.
           </p>
+          <p>
+            Pour la correction automatique, le programme d’un élève est exécuté par Google Cloud Run, sur des serveurs situés en
+            Belgique, sans son identité. Une proposition de correction est demandée à Anthropic (États-Unis), à partir du programme
+            seul : prénom, nom et adresse sont masqués, et l’enseignant vérifie toujours la proposition.
+          </p>
+          <p>
+            L’éditeur Scratch charge ses bibliothèques (lutins, sons, arrière-plans) depuis les serveurs de la fondation Scratch
+            (MIT, États-Unis). L’extension Synthèse vocale leur envoie le texte à prononcer.
+          </p>
         </section>
 
         <section className="space-y-2">
@@ -84,8 +93,8 @@ export default async function ConfidentialitePage() {
         <section className="space-y-2">
           <h2 className="text-lg font-semibold">Combien de temps</h2>
           <p>
-            Les données sont gardées tant que le compte est utilisé. Elles sont supprimées sur simple demande de l’élève, de sa
-            famille ou de son enseignant.
+            Chaque année, le 31 juillet, tous les comptes élèves, leurs projets et toutes les classes sont effacés. L’administrateur
+            peut aussi effacer les données d’un élève à tout moment, sur demande.
           </p>
         </section>
 

@@ -54,12 +54,12 @@ export async function setSolution(db: DB, activityId: string, path: string, form
   await db.insert(activityAutograde).values({ activityId, ...values }).onConflictDoUpdate({ target: activityAutograde.activityId, set: values })
 }
 
-type SettingKey = 'autograde_model' | 'autograde_monthly_cap' | 'autograde_effort'
+type SettingKey = 'autograde_model' | 'autograde_monthly_cap' | 'autograde_effort' | 'remise_a_zero_annee' | 'remise_a_zero_base'
 export async function getSetting(db: Pick<DB, 'select'>, key: SettingKey): Promise<string | null> {
   const [row] = await db.select().from(appSettings).where(eq(appSettings.key, key)).limit(1)
   return row?.value ?? null
 }
-export async function setSetting(db: DB, key: SettingKey, value: string): Promise<void> {
+export async function setSetting(db: Pick<DB, 'insert'>, key: SettingKey, value: string): Promise<void> {
   await db.insert(appSettings).values({ key, value }).onConflictDoUpdate({ target: appSettings.key, set: { value } })
 }
 export async function autogradeModel(db: DB): Promise<AutogradeModel> {

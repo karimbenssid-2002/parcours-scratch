@@ -11,6 +11,8 @@ export interface BucketClient {
   info(path: string): Result<{ size?: number }>
   download(path: string): Result<Blob>
   remove(paths: string[]): Result<unknown>
+  /** Un seul niveau du dossier `prefix` (sans « / » final) ; `id === null` désigne un sous-dossier. */
+  list(prefix: string, options: { limit: number; offset: number }): Result<{ name: string; id: string | null }[]>
   createSignedUploadUrl(path: string, options: { upsert: boolean }): Result<{ signedUrl: string; token: string; path: string }>
 }
 

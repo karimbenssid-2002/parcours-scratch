@@ -19,6 +19,7 @@ import { NextDeadlineCard } from '@/components/eleve/NextDeadlineCard'
 import { StatusBadge } from '@/components/eleve/StatusBadge'
 import { TeacherInk } from '@/components/eleve/TeacherNote'
 import { ensureClosed } from '@/lib/deadlines/ensure'
+import { RetentionNotice } from '@/components/layout/RetentionNotice'
 import { NotificationsToggle } from '@/components/pwa/NotificationsToggle'
 import { pushEnabled, vapidPublicKey } from '@/lib/push/config'
 
@@ -51,6 +52,7 @@ export default async function StudentHome() {
 
   return (
     <div className="space-y-6">
+      <RetentionNotice audience="eleve" />
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="flex items-center gap-2 text-muted">

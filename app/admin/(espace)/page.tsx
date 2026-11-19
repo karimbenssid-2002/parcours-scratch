@@ -13,6 +13,7 @@ import { STATUS_LABELS } from '@/lib/progress/rules'
 import { levelTone } from '@/lib/ui/scratch-colors'
 import { LateNotices } from './LateNotices'
 import { ensureClosed } from '@/lib/deadlines/ensure'
+import { RetentionNotice } from '@/components/layout/RetentionNotice'
 import { NotificationsToggle } from '@/components/pwa/NotificationsToggle'
 import { SourceLink } from '@/components/layout/SourceLink'
 import { pushEnabled, vapidPublicKey } from '@/lib/push/config'
@@ -37,6 +38,7 @@ export default async function AdminHome() {
   const publicKey = pushEnabled() ? vapidPublicKey() : null
   return (
     <div className="mx-auto max-w-7xl space-y-7">
+      <RetentionNotice audience="enseignant" />
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-muted first-letter:uppercase">{today()}</p>

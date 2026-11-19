@@ -1,4 +1,8 @@
 import type { NextConfig } from 'next'
+import { EDITOR_CSP, OFFLINE_PAGE_CSP, PERMISSIONS_POLICY, STRICT_CSP } from './lib/security/headers'
+
+/** Fichiers d'un dossier, adresse terminée par une extension (« /icons/icon-192.png ») : jamais vus par le proxy. */
+const withExtension = (dir: string) => `${dir}/:file(.+\\.[a-zA-Z0-9]+)`
 
 /** Jamais dans le code serveur déployé : la base, les travaux des élèves, les fichiers de test/dev, et PGlite
  * (PostgreSQL en WebAssembly, local et tests uniquement), le code en ligne passant toujours par postgres-js. */
@@ -27,17 +31,32 @@ const nextConfig: NextConfig = {
   env: { AUTOGRADE_AU_BUILD: chromiumLocalAuBuild ? '1' : '0' },
   async headers() {
     const cache = (value: string) => [{ key: 'Cache-Control', value }]
+    const csp = (value: string) => ({ key: 'Content-Security-Policy', value })
     return [
       // Toutes les pages : pas d'affichage dans le cadre d'un autre site (l'éditeur Scratch est une iframe de même
-      // origine, donc permise), pas d'adresse complète transmise aux autres sites, pas de type de fichier deviné.
+      // origine, donc permise), pas d'adresse complète transmise aux autres sites, pas de type de fichier deviné,
+      // caméra et micro pour le site seul. Pas de CSP ici : celle des pages, à nonce, est posée par proxy.ts, et une
+      // seconde CSP sur la même réponse s'y ajouterait (les deux sont appliquées) et bloquerait les scripts à nonce.
       {
         source: '/:path*',
         headers: [
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Permissions-Policy', value: PERMISSIONS_POLICY },
         ],
       },
+      // CSP des fichiers que le proxy ne voit pas. Chaque source ne vise que des adresses exclues du proxy (fichier avec
+      // extension, ou /api/…) : une page passée par le proxy porterait sinon deux CSP. Limite acceptée : une adresse
+      // avec extension qui n'existe pas (404) ne passe pas par le proxy et reste sans CSP.
+      // Éditeur Scratch, y compris ses fichiers servis depuis la racine (voir rewrites) : un worker prend la CSP de sa
+      // propre réponse, d'où la même CSP sur /chunks/ et /static/assets/.
+      ...['/scratch-editor', '/chunks', '/static/assets'].map((dir) => ({ source: withExtension(dir), headers: [csp(EDITOR_CSP)] })),
+      // Page hors connexion (servie par le service worker) : pas de proxy, donc sa propre CSP.
+      { source: '/hors-connexion.html', headers: [csp(OFFLINE_PAGE_CSP)] },
+      // Routes API, icônes et manifestes : CSP stricte par défaut.
+      ...['/api/:path+', withExtension('/icons'), '/favicon.ico', '/manifest.webmanifest', '/admin/manifest.webmanifest']
+        .map((source) => ({ source, headers: [csp(STRICT_CSP)] })),
       // Service worker de la web app : jamais mis en cache, pour que les mises à jour arrivent tout de suite.
       {
         source: '/sw.js',

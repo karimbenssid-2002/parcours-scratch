@@ -14,6 +14,8 @@ import { DefiBrief } from '@/components/eleve/DefiBrief'
 import { TeacherInk, TeacherStamp } from '@/components/eleve/TeacherNote'
 import { formatDue } from '@/lib/deadlines/time'
 import { DefiWorkspace } from './DefiWorkspace'
+import { RetentionNotice } from '@/components/layout/RetentionNotice'
+import { buttonClasses } from '@/components/ui/Button'
 import { ensureClosed } from '@/lib/deadlines/ensure'
 
 export const metadata = { title: 'Défi' }
@@ -34,12 +36,14 @@ export default async function DefiPage({ params }: { params: Promise<{ activityI
 
   return (
     <div className="space-y-6">
+      <RetentionNotice audience="eleve" />
       <div className="flex flex-wrap items-center gap-3">
         <Link href="/" className="inline-flex items-center gap-2 font-semibold text-primary-ink hover:underline">
           <ArrowLeft className="size-4" aria-hidden />Mes défis
         </Link>
+        <a href={`/api/projets/${activityId}?telecharger=1`} download className={buttonClasses('secondary', 'ml-auto')}>Télécharger mon projet</a>
         {solutionShared && (
-          <Link href={`/defis/${activityId}/corrige`} className="ml-auto hidden items-center gap-2 rounded-[10px] bg-panel px-3.5 py-2 font-semibold text-primary-ink shadow-[inset_0_0_0_1.5px_var(--color-line)] hover:bg-primary-wash md:inline-flex">
+          <Link href={`/defis/${activityId}/corrige`} className="hidden items-center gap-2 rounded-[10px] bg-panel px-3.5 py-2 font-semibold text-primary-ink shadow-[inset_0_0_0_1.5px_var(--color-line)] hover:bg-primary-wash md:inline-flex">
             <BookOpenCheck className="size-5" aria-hidden />Corrigé
           </Link>
         )}

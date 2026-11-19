@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db/client'
 import { listAllStudents } from '@/lib/db/students'
 import { LEVELS, levelLabel, parseLevel } from '@/lib/levels'
 import { StudentRow } from './StudentRow'
+import { DeletionNoticeArea } from './DeletionNotice'
 
 export const metadata = { title: 'Élèves' }
 
@@ -25,18 +26,21 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         </select>
         <button type="submit" className="grid size-11 cursor-pointer place-items-center rounded-xl bg-primary text-white" aria-label="Rechercher"><Search className="size-5" aria-hidden /></button>
       </form>
-      <p className="text-sm text-muted">{students.length} élève{students.length > 1 ? 's' : ''}</p>
-      {students.length > 0 && (
-        <div className="glass relative overflow-x-auto">
-          <table className="w-full text-left">
-            <caption className="sr-only">Tous les élèves inscrits</caption>
-            <thead className="border-b border-line text-sm text-muted">
-              <tr><th className="p-3">Élève</th><th className="p-3">Niveau</th><th className="p-3">Classes</th><th className="p-3">Dernière connexion</th></tr>
-            </thead>
-            <tbody>{students.map((s) => <StudentRow key={s.id} student={s} />)}</tbody>
-          </table>
-        </div>
-      )}
+      {/* Message d'une suppression : gardé au-dessus de la liste quand la ligne de l'élève disparaît. */}
+      <DeletionNoticeArea>
+        <p className="text-sm text-muted">{students.length} élève{students.length > 1 ? 's' : ''}</p>
+        {students.length > 0 && (
+          <div className="glass relative overflow-x-auto">
+            <table className="w-full text-left">
+              <caption className="sr-only">Tous les élèves inscrits</caption>
+              <thead className="border-b border-line text-sm text-muted">
+                <tr><th className="p-3">Élève</th><th className="p-3">Niveau</th><th className="p-3">Classes</th><th className="p-3">Dernière connexion</th><th className="p-3"><span className="sr-only">Actions</span></th></tr>
+              </thead>
+              <tbody>{students.map((s) => <StudentRow key={s.id} student={s} />)}</tbody>
+            </table>
+          </div>
+        )}
+      </DeletionNoticeArea>
     </div>
   )
 }

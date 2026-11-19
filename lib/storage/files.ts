@@ -87,6 +87,76 @@ export async function deleteStored(rel: string): Promise<void> {
   await fs.rm(/*turbopackIgnore: true*/ storagePath(rel), { force: true })
 }
 
+const LOT = 100
+
+/** Compte les fichiers d'un dossier local (0 s'il n'existe pas). */
+async function countLocal(dir: string): Promise<number> {
+  let entries
+  try {
+    entries = await fs.readdir(/*turbopackIgnore: true*/ dir, { withFileTypes: true })
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return 0
+    throw e
+  }
+  let n = 0
+  for (const entry of entries) {
+    n += entry.isDirectory() ? await countLocal(path.join(dir, entry.name)) : 1
+  }
+  return n
+}
+
+/**
+ * Efface tout un dossier (`prefix` finit par « / ») et renvoie le nombre de fichiers effacés.
+ * `complete: false` si l'échéance `deadlineMs` (horodatage) est passée avant la fin : rappeler pour continuer.
+ * L'échéance n'est vérifiée qu'avant chaque `list` et ne s'applique qu'à Supabase (ignorée en local).
+ */
+export async function deleteStoredPrefix(
+  prefix: string,
+  opts: { deadlineMs?: number } = {},
+): Promise<{ deleted: number; complete: boolean }> {
+  if (!prefix.endsWith('/')) throw new Error(`Le préfixe doit finir par « / » : ${prefix}`)
+  checkRel(prefix)
+  if (!isSupabase()) {
+    const dir = storagePath(prefix)
+    const deleted = await countLocal(dir)
+    await fs.rm(/*turbopackIgnore: true*/ dir, { recursive: true, force: true })
+    return { deleted, complete: true }
+  }
+  const b = bucket()
+  const expire = () => opts.deadlineMs !== undefined && Date.now() > opts.deadlineMs
+  let deleted = 0
+  let lot: string[] = []
+  const vider = async () => {
+    if (!lot.length) return
+    const { error } = await b.remove(lot)
+    if (error) throw error
+    deleted += lot.length
+    lot = []
+  }
+  // Un niveau est lu en entier (toutes les pages) avant toute suppression : supprimer pendant la pagination
+  // décalerait les offsets et ferait sauter des fichiers.
+  const parcourir = async (dir: string): Promise<boolean> => {
+    const dossiers: string[] = []
+    const fichiers: string[] = []
+    for (let offset = 0; ; offset += LOT) {
+      if (expire()) return false
+      const { data, error } = await b.list(dir, { limit: LOT, offset })
+      if (error) throw error
+      for (const item of data ?? []) (item.id === null ? dossiers : fichiers).push(`${dir}/${item.name}`)
+      if ((data?.length ?? 0) < LOT) break
+    }
+    for (const f of fichiers) {
+      lot.push(f)
+      if (lot.length >= LOT) await vider()
+    }
+    for (const sous of dossiers) if (!(await parcourir(sous))) return false
+    return true
+  }
+  const complete = await parcourir(prefix.slice(0, -1))
+  await vider()
+  return { deleted, complete }
+}
+
 /**
  * URL d'envoi direct vers le bucket (fichiers trop gros pour passer par le serveur). Null en local.
  * Sans upsert : l'URL (valable 2 h) ne crée l'objet qu'une fois et ne peut pas remplacer un fichier déjà validé.
@@ -97,4 +167,31 @@ export async function signedUploadUrl(rel: string): Promise<{ url: string; token
   const { data, error } = await bucket().createSignedUploadUrl(rel, { upsert: false })
   if (error) throw error
   return { url: data!.signedUrl, token: data!.token }
+}
+
+/**
+ * Noms des dossiers du premier niveau sous `prefix` (qui finit par « / ») ; les fichiers posés directement sous
+ * `prefix` sont ignorés. Liste vide si le dossier n'existe pas. Sert à la reprise de la remise à zéro annuelle.
+ */
+export async function listStoredFolders(prefix: string): Promise<string[]> {
+  if (!prefix.endsWith('/')) throw new Error(`Le préfixe doit finir par « / » : ${prefix}`)
+  checkRel(prefix)
+  if (!isSupabase()) {
+    try {
+      const entries = await fs.readdir(/*turbopackIgnore: true*/ storagePath(prefix), { withFileTypes: true })
+      return entries.filter((e) => e.isDirectory()).map((e) => e.name)
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw e
+    }
+  }
+  const b = bucket()
+  const dossiers: string[] = []
+  for (let offset = 0; ; offset += LOT) {
+    const { data, error } = await b.list(prefix.slice(0, -1), { limit: LOT, offset })
+    if (error) throw error
+    for (const item of data ?? []) if (item.id === null) dossiers.push(item.name)
+    if ((data?.length ?? 0) < LOT) break
+  }
+  return dossiers
 }

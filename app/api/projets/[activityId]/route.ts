@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getStudentForApi } from '@/lib/auth/session'
 import { getDb } from '@/lib/db/client'
+import { getActivityDetail } from '@/lib/db/activities'
 import { isProjectUploadPath, loadProject, projectUploadPath, saveProject } from '@/lib/projects/service'
 import { receiveUpload, uploadTicket } from '@/lib/storage/direct-upload'
 
@@ -20,9 +21,14 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   }
   const result = await loadProject(getDb(), student, activityId)
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
-  return new Response(result.bytes, {
-    headers: { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Project-Source': result.source },
-  })
+  const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Project-Source': result.source }
+  // ?telecharger=1 : même fichier, proposé en téléchargement sous le nom du défi.
+  if (request.nextUrl.searchParams.has('telecharger')) {
+    const slug = (await getActivityDetail(getDb(), activityId))?.slug ?? 'projet'
+    const safe = slug.replace(/[^A-Za-z0-9._-]/g, '_')
+    headers['Content-Disposition'] = `attachment; filename="${safe}.sb3"; filename*=UTF-8''${encodeURIComponent(slug)}.sb3`
+  }
+  return new Response(result.bytes, { headers })
 }
 
 /** Sauvegarde : corps brut (stockage local) ou { path } d'un fichier déposé dans le stockage en ligne. */

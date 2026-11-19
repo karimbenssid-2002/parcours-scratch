@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { AdminStudentRow } from '@/lib/db/students'
 import { levelsLabel } from '@/lib/levels'
+import { DeleteStudentButton } from './DeleteStudentButton'
 
 export function StudentRow({ student }: { student: AdminStudentRow }) {
   const name = `${student.firstName} ${student.lastName}`
@@ -13,6 +14,7 @@ export function StudentRow({ student }: { student: AdminStudentRow }) {
       <td className="p-3 text-sm">{levelsLabel(student.levels)}</td>
       <td className="p-3 text-sm">{student.classes.length ? student.classes.join(', ') : <span className="text-muted">Aucune</span>}</td>
       <td className="p-3 text-sm text-muted">{student.lastLoginAt ? new Date(student.lastLoginAt).toLocaleDateString('fr-FR') : 'Jamais'}</td>
+      <td className="p-3 text-sm"><DeleteStudentButton studentId={student.id} name={name} /></td>
     </tr>
   )
 }

@@ -5,6 +5,7 @@ import { getDb } from '@/lib/db/client'
 import { listClassesForTeacher } from '@/lib/db/classes'
 import { levelLabel } from '@/lib/levels'
 import { ClassCreateForm } from './ClassCreateForm'
+import { RetentionNotice } from '@/components/layout/RetentionNotice'
 
 export const metadata = { title: 'Mes classes' }
 
@@ -13,6 +14,7 @@ export default async function ClassesPage() {
   const list = await listClassesForTeacher(getDb(), teacher.id)
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      <RetentionNotice audience="enseignant" />
       <h1 className="text-[34px] font-semibold leading-tight tracking-[-0.02em]">Mes classes</h1>
       <ClassCreateForm />
       {list.length === 0 ? (
