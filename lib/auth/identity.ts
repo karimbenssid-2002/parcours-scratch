@@ -31,7 +31,8 @@ export function checkGoogleIdentity(id: GoogleIdentity, kind: LoginKind): Identi
 /**
  * Identité d'un enseignant : la partie avant le @ de l'adresse, en minuscules, quel que soit le domaine. Pour un compte,
  * c'est la partie avant le @ de `teachers.email`, jamais `teachers.username` (qui peut porter un suffixe numérique
- * « prenom.nom2 » sans rapport avec l'adresse).
+ * « prenom.nom2 » sans rapport avec l'adresse). Elle ne sert qu'à l'identifiant, à la limite des demandes et à la règle
+ * « un seul compte par personne » ; jamais à la connexion, qui exige l'adresse exacte (teacherGoogleLogin).
  */
 export function teacherIdentity(email: string): string {
   const e = normalizeEmail(email)
@@ -40,10 +41,9 @@ export function teacherIdentity(email: string): string {
 }
 
 /**
- * Avertissement d'une demande de compte enseignant : la règle des homonymes ouvre le compte validé à `prenom.nom` sur
- * les deux domaines (TEACHER_DOMAINS), quel que soit celui de la demande.
+ * Rappel d'une demande de compte enseignant : le compte validé ne s'ouvre qu'avec l'adresse exacte de la demande
+ * (aucune équivalence entre les deux domaines, voir teacherGoogleLogin).
  */
-export function bothAddressesWarning(requestEmail: string): string {
-  const [a, b] = TEACHER_DOMAINS.map((d) => `${teacherIdentity(requestEmail)}@${d}`)
-  return `Valider ouvre ce compte aux deux adresses ${a} et ${b} : vérifiez que ce collègue possède bien les deux.`
+export function exactAddressNotice(requestEmail: string): string {
+  return `Valider ouvre ce compte à la seule adresse ${normalizeEmail(requestEmail)} : ce collègue se connectera avec elle, et avec aucune autre.`
 }

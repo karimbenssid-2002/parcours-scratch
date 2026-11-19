@@ -15,7 +15,7 @@ describe('sendEmail', () => {
     const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock)
     expect(await sendEmail(msg)).toEqual({ delivered: false })
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(console.info).toHaveBeenCalled()
+    expect(vi.mocked(console.info).mock.calls.length + vi.mocked(console.error).mock.calls.length).toBeGreaterThan(0)
   })
 
   it('sans clé Resend, en local : la console affiche tout le message (mot de passe provisoire compris)', async () => {
@@ -27,15 +27,36 @@ describe('sendEmail', () => {
     expect(logged).toContain('secret-123')
   })
 
-  it("sans clé Resend, en production : seuls le destinataire et l'objet sont écrits, jamais le corps", async () => {
+  it("sans clé Resend, en production : une ligne générique, sans destinataire, sans corps, aucune adresse", async () => {
     vi.stubEnv('RESEND_API_KEY', ''); vi.stubEnv('NODE_ENV', 'production')
     const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock)
     expect(await sendEmail(msg)).toEqual({ delivered: false })
     expect(fetchMock).not.toHaveBeenCalled()
-    const logged = JSON.stringify([(console.info as ReturnType<typeof vi.fn>).mock.calls, (console.error as ReturnType<typeof vi.fn>).mock.calls])
-    expect(logged).toContain(msg.to)
+    const logged = JSON.stringify([vi.mocked(console.info).mock.calls, vi.mocked(console.error).mock.calls])
+    expect(logged).toContain('RESEND_API_KEY absent')
     expect(logged).toContain(msg.subject)
+    expect(logged).not.toContain(msg.to)
     expect(logged).not.toContain('secret-123')
+    expect(logged).not.toContain('@')
+  })
+
+  it("hors développement (test, scripts) : aucune adresse dans les journaux, même dans l'objet", async () => {
+    vi.stubEnv('RESEND_API_KEY', ''); vi.stubEnv('NODE_ENV', 'test')
+    vi.stubGlobal('fetch', vi.fn())
+    await sendEmail({ to: 'prof@malraux-rabat.org', subject: 'Demande de chloe.essai@mlfmonde.org', text: 'De prof@malraux-rabat.org' })
+    const logged = JSON.stringify([vi.mocked(console.info).mock.calls, vi.mocked(console.error).mock.calls])
+    expect(logged).toContain('Demande de [adresse]')
+    expect(logged).not.toContain('@')
+  })
+
+  it("les objets réels (demande d'inscription, compte validé) ne contiennent aucune adresse", async () => {
+    vi.stubEnv('RESEND_API_KEY', ''); vi.stubEnv('NODE_ENV', 'production')
+    vi.stubGlobal('fetch', vi.fn())
+    for (const subject of ["Demande d'inscription — Parcours Scratch", 'Votre compte est validé — Parcours Scratch']) {
+      await sendEmail({ to: 'chloe.essai@mlfmonde.org', subject, text: 'Demande de chloe.essai@mlfmonde.org' })
+    }
+    const logged = JSON.stringify([vi.mocked(console.info).mock.calls, vi.mocked(console.error).mock.calls])
+    expect(logged).not.toContain('@')
   })
 
   it("poste le message à l'API Resend avec la clé et l'expéditeur", async () => {

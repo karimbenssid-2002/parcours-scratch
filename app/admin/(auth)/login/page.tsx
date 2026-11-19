@@ -22,7 +22,7 @@ export default async function AdminLoginPage({ searchParams }: {
         {hint && <p className="text-center text-sm text-muted">{hint}</p>}
         {error && <Alert tone="danger">{error}</Alert>}
         {dev ? <DevLogin kind="enseignant" accounts={await listDevTeachers(getDb())} /> : <GoogleButton kind="enseignant" />}
-        <p className="text-center text-sm text-muted">Avec votre adresse @malraux-rabat.org ou @mlfmonde.org.</p>
+        <p className="text-center text-sm text-muted">Avec l’adresse exacte de votre compte (@malraux-rabat.org ou @mlfmonde.org).</p>
         <p className="pt-2 text-center text-sm font-semibold">
           <Link className="text-primary-ink underline-offset-4 hover:underline" href="/admin/demande-compte">Demander un compte</Link>
         </p>

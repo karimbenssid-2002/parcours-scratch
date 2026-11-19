@@ -4,7 +4,15 @@ import { testDb } from '../helpers/db'
 import type { DB } from '@/lib/db/client'
 
 // Gardes de session appelées directement : cookies et redirections de Next remplacés, base de test.
-const ctx = vi.hoisted(() => ({ db: null as unknown, cookies: new Map<string, string>() }))
+const ctx = vi.hoisted(() => ({
+  db: null as unknown, cookies: new Map<string, string>(), mails: [] as { to: string; subject: string; text: string }[],
+}))
+vi.mock('@/lib/email', () => ({
+  sendEmail: async (msg: { to: string; subject: string; text: string }) => {
+    ctx.mails.push(msg)
+    return { delivered: true }
+  },
+}))
 vi.mock('@/lib/db/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/db/client')>()),
   getDb: () => ctx.db,
@@ -29,12 +37,14 @@ const { seedAdmin } = await import('@/lib/seed/admin')
 const { ADMIN_COOKIE, verifyAdmin, verifyStudent } = await import('@/lib/auth/jwt')
 const { adminSessionCookie, getTeacherForApi, requireTeacher } = await import('@/lib/auth/session')
 const { teacherRequests, teachers } = await import('@/lib/db/schema')
+const { teacherGoogleLogin } = await import('@/lib/auth/google-login')
 
 let db: DB
 beforeEach(async () => {
   db = await testDb()
   ctx.db = db
   ctx.cookies.clear()
+  ctx.mails.length = 0
 }, 30_000)
 
 const prof = (email: string) =>
@@ -50,6 +60,21 @@ describe('approveTeacherRequest', () => {
     expect(t).toMatchObject({ username: 'marie-anne.el-fictif', role: 'prof', isActive: true, firstName: 'Marie-Anne', lastName: 'El-Fictif' })
     expect(Object.keys(t!).filter((k) => /password/i.test(k))).toEqual([])
     expect(await listPendingRequests(db)).toHaveLength(0)
+  })
+
+  it("l'e-mail de validation nomme l'adresse exacte, et seule elle ouvre le compte", async () => {
+    await createTeacherRequest(db, 'Chloe.Essai@mlfmonde.org')
+    const [req] = await listPendingRequests(db)
+    expect(await approveTeacherRequest(db, req.id)).toEqual({ ok: true, username: 'chloe.essai' })
+    expect(ctx.mails).toHaveLength(1)
+    expect(ctx.mails[0].to).toBe('chloe.essai@mlfmonde.org')
+    expect(ctx.mails[0].text).toContain('chloe.essai@mlfmonde.org')
+    expect(ctx.mails[0].text).not.toContain('malraux-rabat.org')
+    expect(ctx.mails[0].text).not.toMatch(/ ou @/)
+    expect(ctx.mails[0].subject).not.toContain('@') // l'objet peut être écrit dans les journaux (lib/email)
+
+    expect(await teacherGoogleLogin(db, 'chloe.essai@mlfmonde.org')).toMatchObject({ ok: true, teacher: { username: 'chloe.essai' } })
+    expect(await teacherGoogleLogin(db, 'chloe.essai@malraux-rabat.org')).toEqual({ ok: false, reason: 'aucun' })
   })
 
   it("demande @mlfmonde.org alors qu'un compte @malraux-rabat.org de même identité existe : doublon", async () => {

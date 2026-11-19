@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bothAddressesWarning, checkGoogleIdentity, STUDENT_DOMAINS, TEACHER_DOMAINS, teacherIdentity } from '@/lib/auth/identity'
+import { checkGoogleIdentity, exactAddressNotice, STUDENT_DOMAINS, TEACHER_DOMAINS, teacherIdentity } from '@/lib/auth/identity'
 
 const id = (email: string, hd: string | null, emailVerified = true) => ({ email, emailVerified, hd })
 
@@ -72,12 +72,13 @@ describe('checkGoogleIdentity — enseignant', () => {
   })
 })
 
-describe('bothAddressesWarning', () => {
-  it("nomme les deux adresses de l'identité demandée, quel que soit le domaine de la demande", () => {
-    const text = 'Valider ouvre ce compte aux deux adresses chloe.essai@malraux-rabat.org et chloe.essai@mlfmonde.org : '
-      + 'vérifiez que ce collègue possède bien les deux.'
-    expect(bothAddressesWarning('Chloe.Essai@mlfmonde.org')).toBe(text)
-    expect(bothAddressesWarning('chloe.essai@malraux-rabat.org')).toBe(text)
+describe('exactAddressNotice', () => {
+  it("ne nomme que l'adresse exacte de la demande, jamais celle de l'autre domaine", () => {
+    expect(exactAddressNotice('Chloe.Essai@mlfmonde.org')).toBe(
+      'Valider ouvre ce compte à la seule adresse chloe.essai@mlfmonde.org : ce collègue se connectera avec elle, et avec aucune autre.')
+    expect(exactAddressNotice('chloe.essai@malraux-rabat.org')).toContain('chloe.essai@malraux-rabat.org')
+    expect(exactAddressNotice('chloe.essai@malraux-rabat.org')).not.toContain('mlfmonde.org')
+    expect(exactAddressNotice('chloe.essai@mlfmonde.org')).not.toContain('malraux-rabat.org')
   })
 })
 

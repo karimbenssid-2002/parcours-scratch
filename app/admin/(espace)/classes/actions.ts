@@ -6,6 +6,7 @@ import { getDb } from '@/lib/db/client'
 import { addEmailsToClass, createClass, deleteClass, getClassForTeacher, removeEmailFromClass, updateClass } from '@/lib/db/classes'
 import { parseEmailList } from '@/lib/classes/emails'
 import { parseLevel, type Level } from '@/lib/levels'
+import { actionFailed, safeAction } from '@/lib/http/safe-action'
 
 export type ClassFormState = { error?: string } | null
 export type AddStudentsState = { added: string[]; already: string[]; invalid: string[]; duplicates: string[]; error?: string } | null
@@ -41,21 +42,27 @@ export async function deleteClassAction(classId: string): Promise<void> {
   redirect('/admin/classes')
 }
 
+// Listes d'adresses : une erreur imprévue de la base est journalisée sans adresse (safeAction), réponse générique.
 export async function addStudentsAction(classId: string, _prev: AddStudentsState, formData: FormData): Promise<AddStudentsState> {
   const teacher = await requireTeacher()
-  const db = getDb()
-  if (!(await getClassForTeacher(db, teacher.id, classId))) return { added: [], already: [], invalid: [], duplicates: [], error: 'Classe introuvable.' }
-  const parsed = parseEmailList(String(formData.get('emails') ?? ''))
-  if (parsed.valid.length === 0 && parsed.invalid.length === 0) return { added: [], already: [], invalid: [], duplicates: [], error: 'Collez au moins une adresse.' }
-  const { added, already } = await addEmailsToClass(db, classId, parsed.valid)
-  revalidatePath(`/admin/classes/${classId}`)
-  return { added, already, invalid: parsed.invalid, duplicates: parsed.duplicates }
+  const empty = { added: [], already: [], invalid: [], duplicates: [] }
+  return safeAction('ajout d’élèves à une classe', async () => {
+    const db = getDb()
+    if (!(await getClassForTeacher(db, teacher.id, classId))) return { ...empty, error: 'Classe introuvable.' }
+    const parsed = parseEmailList(String(formData.get('emails') ?? ''))
+    if (parsed.valid.length === 0 && parsed.invalid.length === 0) return { ...empty, error: 'Collez au moins une adresse.' }
+    const { added, already } = await addEmailsToClass(db, classId, parsed.valid)
+    revalidatePath(`/admin/classes/${classId}`)
+    return { added, already, invalid: parsed.invalid, duplicates: parsed.duplicates }
+  }, () => ({ ...empty, error: 'Les adresses n’ont pas pu être ajoutées. Réessayez.' }))
 }
 
 export async function removeStudentAction(classId: string, email: string): Promise<void> {
   const teacher = await requireTeacher()
-  const db = getDb()
-  if (!(await getClassForTeacher(db, teacher.id, classId))) return
-  await removeEmailFromClass(db, classId, email)
-  revalidatePath(`/admin/classes/${classId}`)
+  return safeAction('retrait d’un élève d’une classe', async () => {
+    const db = getDb()
+    if (!(await getClassForTeacher(db, teacher.id, classId))) return
+    await removeEmailFromClass(db, classId, email)
+    revalidatePath(`/admin/classes/${classId}`)
+  }, () => actionFailed('Le retrait a échoué. Réessayez.'))
 }

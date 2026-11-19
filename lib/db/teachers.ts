@@ -32,7 +32,8 @@ export async function createTeacher(db: DB, t: NewTeacher): Promise<Teacher> {
 
 /**
  * Comptes dont l'adresse enregistrée a cette identité (partie avant le @, quel que soit le domaine), au plus `limit`.
- * Jamais par `username`, qui peut porter un suffixe ancien (« prenom.nom2 ») sans rapport avec l'adresse.
+ * Jamais par `username`, qui peut porter un suffixe ancien (« prenom.nom2 ») sans rapport avec l'adresse. Sert à la règle
+ * « un seul compte par personne » (demandes, validation), jamais à la connexion.
  */
 export async function findTeachersByIdentity(db: DB, identity: string, limit = 2): Promise<Teacher[]> {
   return db.select().from(teachers).where(eq(emailIdentity(teachers.email), identity.trim().toLowerCase())).limit(limit)

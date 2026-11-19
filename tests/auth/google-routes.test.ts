@@ -195,22 +195,44 @@ describe('retour de Google', () => {
     expectPendingCleared(res)
   })
 
-  it('enseignant en attente → ?erreur=en-attente', async () => {
+  it('enseignant en attente (même adresse que la demande) → ?erreur=en-attente', async () => {
     await createTeacherRequest(db, 'chloe.essai@mlfmonde.org')
-    const res = await roundTrip('enseignant', { email: 'chloe.essai@malraux-rabat.org', emailVerified: true, hd: 'malraux-rabat.org' })
+    const res = await roundTrip('enseignant', { email: 'chloe.essai@mlfmonde.org', emailVerified: true, hd: 'mlfmonde.org' })
     expect(location(res)).toBe('/admin/login?erreur=en-attente')
     expectNoSession(res)
     expectPendingCleared(res)
   })
 
-  it('enseignant actif → cookie admin_session, puis tableau de bord', async () => {
-    await createTeacher(db, { email: 'bob.modele@malraux-rabat.org', username: 'bob.modele', firstName: 'Bob', lastName: 'Modele', role: 'prof' })
+  it("demande en attente @mlfmonde.org, connexion avec le même prenom.nom @malraux-rabat.org → ?erreur=aucun", async () => {
+    await createTeacherRequest(db, 'chloe.essai@mlfmonde.org')
+    const res = await roundTrip('enseignant', { email: 'chloe.essai@malraux-rabat.org', emailVerified: true, hd: 'malraux-rabat.org' })
+    expect(location(res)).toBe('/admin/login?erreur=aucun')
+    expectNoSession(res)
+  })
+
+  it('enseignant actif (adresse exacte) → cookie admin_session, puis tableau de bord', async () => {
+    await createTeacher(db, { email: 'bob.modele@mlfmonde.org', username: 'bob.modele', firstName: 'Bob', lastName: 'Modele', role: 'prof' })
     const res = await roundTrip('enseignant', { email: 'bob.modele@mlfmonde.org', emailVerified: true, hd: 'mlfmonde.org' })
     expect(res.status).toBe(200)
     expect(cookieNamed(res, 'admin_session')).toBeDefined()
     expect(cookieNamed(res, 'student_session')).toBeUndefined()
     expect(await res.text()).toContain('url=/admin"')
     expectPendingCleared(res)
+  })
+
+  it("compte @malraux-rabat.org : le même prenom.nom @mlfmonde.org → ?erreur=aucun, aucune session", async () => {
+    await createTeacher(db, { email: 'bob.modele@malraux-rabat.org', username: 'bob.modele', firstName: 'Bob', lastName: 'Modele', role: 'prof' })
+    const res = await roundTrip('enseignant', { email: 'bob.modele@mlfmonde.org', emailVerified: true, hd: 'mlfmonde.org' })
+    expect(location(res)).toBe('/admin/login?erreur=aucun')
+    expectNoSession(res)
+    expectPendingCleared(res)
+  })
+
+  it("compte @mlfmonde.org : le même prenom.nom @malraux-rabat.org → ?erreur=aucun, aucune session", async () => {
+    await createTeacher(db, { email: 'bob.modele@mlfmonde.org', username: 'bob.modele', firstName: 'Bob', lastName: 'Modele', role: 'admin' })
+    const res = await roundTrip('enseignant', { email: 'bob.modele@malraux-rabat.org', emailVerified: true, hd: 'malraux-rabat.org' })
+    expect(location(res)).toBe('/admin/login?erreur=aucun')
+    expectNoSession(res)
   })
 
   it("un enseignant sur la page élève reste un élève (aucune session enseignant)", async () => {

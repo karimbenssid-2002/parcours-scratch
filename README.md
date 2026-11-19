@@ -21,7 +21,8 @@ npm run dev                  # http://localhost:3000 (élèves) et http://localh
   développement** (choisir un compte existant de la base locale), à la place du bouton « Se connecter avec Google ».
   Elle répond 404 en production (`NODE_ENV=production`), sur Vercel, ou dès que `GOOGLE_CLIENT_ID` est défini.
 - La base PGlite ne s'ouvre que dans un processus à la fois : arrêter `npm run dev` avant `npm run seed`.
-- Les e-mails (notifications) s'affichent dans la console du serveur tant que `RESEND_API_KEY` n'est pas défini.
+- Les e-mails (notifications) s'affichent dans la console du serveur tant que `RESEND_API_KEY` n'est pas défini (en entier
+  sous `npm run dev` seulement ; ailleurs, une ligne sans destinataire, sans corps ni adresse).
 - Un dépôt fraîchement cloné démarre **sans aucun défi** : ils se créent depuis l'espace admin (`/admin`).
 
 ## Variables d'environnement
@@ -101,7 +102,8 @@ Les tests créent des comptes fictifs uniquement dans cette base en mémoire. `t
 - `app/(eleve)` : espace élève ; `app/admin` : espace enseignants et admin ; `app/api` : fichiers (projets, vignettes, corrigés).
 - `lib/db/` : **seul** point d'accès à la base (Drizzle ; migrations dans `drizzle/`).
 - `lib/auth/` : connexion avec Google (`google.ts` : OpenID Connect avec PKCE, `state` et `nonce` ; `identity.ts` : domaines
-  du collège et identité `prenom.nom` ; `google-login.ts` : qui entre ; routes `app/auth/`),
+  du collège et identité `prenom.nom` ; `google-login.ts` : qui entre, enseignants et admin par l'adresse exacte de leur
+  compte seulement ; routes `app/auth/`),
   sessions JWT séparées (`admin_session`, `student_session`), routage (`routing.ts`, utilisé par `proxy.ts`),
   limitation des tentatives de connexion en base, revérification des droits côté serveur (`session.ts`).
 - `lib/storage/` : fichiers en local ou dans Supabase Storage (envois directs par URL signée).

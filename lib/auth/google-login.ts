@@ -1,11 +1,10 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import type { DB } from '@/lib/db/client'
 import { isEmailInAnyClass } from '@/lib/db/classes'
-import { emailIdentity, teacherRequests } from '@/lib/db/schema'
+import { teacherRequests } from '@/lib/db/schema'
 import { createStudent, findStudentByEmail, StudentExistsError, touchStudentLogin, type Student } from '@/lib/db/students'
-import { findTeacherByEmail, findTeachersByIdentity, touchTeacherLogin, type Teacher } from '@/lib/db/teachers'
-import { TEACHER_DOMAINS, teacherIdentity } from '@/lib/auth/identity'
-import { emailDomain, normalizeEmail } from '@/lib/auth/validation'
+import { findTeacherByEmail, touchTeacherLogin, type Teacher } from '@/lib/db/teachers'
+import { normalizeEmail } from '@/lib/auth/validation'
 
 // Décisions de connexion une fois l'adresse prouvée par Google (et déjà contrôlée par checkGoogleIdentity).
 // Élèves et enseignants sont totalement séparés : chaque fonction n'applique que la règle de son rôle.
@@ -47,32 +46,23 @@ export async function studentGoogleLogin(db: DB, email: string): Promise<Student
 }
 
 /**
- * Administrateur : uniquement par son adresse exacte (`teachers.email`). Enseignant : la même adresse, ou la même
- * identité `prenom.nom` (partie avant le @ de `teachers.email`) sur l'autre domaine (teacherIdentity). Compte désactivé → `aucun`. Sans compte : demande
- * d'inscription en attente pour cette identité (l'un ou l'autre domaine) → `en-attente`, sinon `aucun`.
+ * Enseignant comme administrateur : uniquement par l'adresse exacte enregistrée (`teachers.email`, en minuscules), sur
+ * l'un ou l'autre domaine du collège (TEACHER_DOMAINS, déjà contrôlé par checkGoogleIdentity). Aucune équivalence entre
+ * `prenom.nom@malraux-rabat.org` et `prenom.nom@mlfmonde.org` : deux personnes différentes peuvent porter le même
+ * prenom.nom sur les deux domaines. Compte désactivé → `aucun`. Sans compte : demande d'inscription en attente pour
+ * cette adresse exacte → `en-attente`, sinon `aucun`.
  */
 export async function teacherGoogleLogin(db: DB, email: string): Promise<TeacherLogin> {
   const e = normalizeEmail(email)
-  const identity = teacherIdentity(e)
 
   const exact = await findTeacherByEmail(db, e)
   if (exact) return exact.isActive ? { ok: true, teacher: await openTeacherAccount(db, exact) } : { ok: false, reason: 'aucun' }
 
-  // Autre domaine : partie avant le @ de l'adresse ENREGISTRÉE du compte (jamais `username`, qui peut porter un suffixe
-  // « prenom.nom2 » sans rapport avec l'adresse). Plusieurs comptes de même identité (doublons anciens) → refus.
-  if (!(TEACHER_DOMAINS as readonly string[]).includes(emailDomain(e) ?? '')) return { ok: false, reason: 'aucun' }
-  const sameIdentity = await findTeachersByIdentity(db, identity, 2)
-  if (sameIdentity.length > 1) return { ok: false, reason: 'aucun' }
-  if (sameIdentity.length === 1) {
-    const t = sameIdentity[0]
-    // Le risque d'homonyme accepté pour mlfmonde.org ne donne jamais les droits d'administrateur.
-    if (t.role !== 'prof' || !t.isActive) return { ok: false, reason: 'aucun' }
-    return { ok: true, teacher: await openTeacherAccount(db, t) }
-  }
-
+  // Les demandes sont enregistrées en minuscules (createTeacherRequestId) ; lower() couvre aussi d'éventuelles lignes
+  // anciennes saisies telles quelles. Comparaison de l'adresse entière, jamais de l'identité.
   const [pending] = await db.select({ id: teacherRequests.id }).from(teacherRequests).where(and(
     eq(teacherRequests.status, 'pending'),
-    eq(emailIdentity(teacherRequests.email), identity),
+    eq(sql`lower(${teacherRequests.email})`, e),
   )).limit(1)
   return { ok: false, reason: pending ? 'en-attente' : 'aucun' }
 }

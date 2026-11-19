@@ -32,9 +32,15 @@ describe('action « supprimer l’élève »', () => {
     expect(cache.revalidatePath).not.toHaveBeenCalled()
   })
 
-  it('erreur de la base (rien n’est effacé) : elle remonte, le bouton affiche l’échec', async () => {
-    erase.eraseStudent.mockRejectedValueOnce(new Error('base indisponible'))
-    await expect(deleteStudent('s1')).rejects.toThrow('base indisponible')
+  it('erreur de la base (rien n’est effacé) : message d’échec, journal sans l’adresse de l’élève', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    erase.eraseStudent.mockRejectedValueOnce(new Error('Failed query: delete from "class_students"\nparams: alice.exemple@malraux-rabat.org',
+      { cause: new Error('base indisponible pour alice.exemple@malraux-rabat.org') }))
+    expect(await deleteStudent('s1')).toEqual({ error: 'La suppression a échoué. Rechargez la page.' })
     expect(cache.revalidatePath).not.toHaveBeenCalled()
+    const logged = JSON.stringify(log.mock.calls)
+    expect(logged).toContain('base indisponible')
+    expect(logged).not.toContain('@')
+    log.mockRestore()
   })
 })

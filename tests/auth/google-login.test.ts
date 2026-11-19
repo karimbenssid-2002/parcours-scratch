@@ -110,14 +110,28 @@ describe('studentGoogleLogin', () => {
 })
 
 describe('teacherGoogleLogin', () => {
-  it('un enseignant actif entre par ses deux adresses, dans le même compte', async () => {
+  it('un enseignant actif entre par son adresse exacte (casse indifférente), et note la connexion', async () => {
     const db = await testDb()
     const t = await prof(db, 'bob.modele@malraux-rabat.org')
-    const a = await teacherGoogleLogin(db, 'bob.modele@malraux-rabat.org')
-    const b = await teacherGoogleLogin(db, 'bob.modele@mlfmonde.org')
-    expect(a).toMatchObject({ ok: true, teacher: { id: t.id, role: 'prof' } })
-    expect(b).toMatchObject({ ok: true, teacher: { id: t.id, role: 'prof' } })
-    expect(await teacherGoogleLogin(db, 'Bob.Modele@MLFmonde.org')).toMatchObject({ ok: true, teacher: { id: t.id } })
+    expect(await teacherGoogleLogin(db, 'bob.modele@malraux-rabat.org')).toMatchObject({ ok: true, teacher: { id: t.id, role: 'prof' } })
+    expect(await teacherGoogleLogin(db, ' Bob.Modele@Malraux-Rabat.org ')).toMatchObject({ ok: true, teacher: { id: t.id } })
+    expect((await db.select().from(teachers).where(eq(teachers.id, t.id)))[0].lastLoginAt).not.toBeNull()
+  })
+
+  it('compte @malraux-rabat.org : le même prenom.nom @mlfmonde.org ne l’ouvre PAS (homonyme possible)', async () => {
+    const db = await testDb()
+    await prof(db, 'bob.modele@malraux-rabat.org')
+    expect(await teacherGoogleLogin(db, 'bob.modele@mlfmonde.org')).toEqual({ ok: false, reason: 'aucun' })
+    expect(await teacherGoogleLogin(db, 'Bob.Modele@MLFmonde.org')).toEqual({ ok: false, reason: 'aucun' })
+    const [row] = await db.select().from(teachers)
+    expect(row.lastLoginAt).toBeNull()
+  })
+
+  it('compte @mlfmonde.org : seule cette adresse entre, pas le même prenom.nom @malraux-rabat.org', async () => {
+    const db = await testDb()
+    const t = await prof(db, 'bob.modele@mlfmonde.org')
+    expect(await teacherGoogleLogin(db, 'bob.modele@mlfmonde.org')).toMatchObject({ ok: true, teacher: { id: t.id, role: 'prof' } })
+    expect(await teacherGoogleLogin(db, 'bob.modele@malraux-rabat.org')).toEqual({ ok: false, reason: 'aucun' })
   })
 
   it('un enseignant désactivé → aucun', async () => {
@@ -125,14 +139,28 @@ describe('teacherGoogleLogin', () => {
     const t = await prof(db, 'bob.modele@malraux-rabat.org')
     await setTeacherActive(db, t.id, false)
     expect(await teacherGoogleLogin(db, 'bob.modele@malraux-rabat.org')).toEqual({ ok: false, reason: 'aucun' })
-    expect(await teacherGoogleLogin(db, 'bob.modele@mlfmonde.org')).toEqual({ ok: false, reason: 'aucun' })
   })
 
-  it('demande en attente faite avec @mlfmonde.org, connexion avec @malraux-rabat.org → en-attente', async () => {
+  it('demande en attente @mlfmonde.org : en-attente pour cette adresse exacte seulement', async () => {
     const db = await testDb()
-    await createTeacherRequest(db, 'chloe.essai@mlfmonde.org')
-    expect(await teacherGoogleLogin(db, 'chloe.essai@malraux-rabat.org')).toEqual({ ok: false, reason: 'en-attente' })
+    await createTeacherRequest(db, 'Chloe.Essai@mlfmonde.org')
     expect(await teacherGoogleLogin(db, 'chloe.essai@mlfmonde.org')).toEqual({ ok: false, reason: 'en-attente' })
+    expect(await teacherGoogleLogin(db, 'CHLOE.ESSAI@mlfmonde.org')).toEqual({ ok: false, reason: 'en-attente' })
+    expect(await teacherGoogleLogin(db, 'chloe.essai@malraux-rabat.org')).toEqual({ ok: false, reason: 'aucun' })
+  })
+
+  it('demande en attente ancienne, saisie en majuscules : reconnue par son adresse exacte seulement', async () => {
+    const db = await testDb()
+    await db.insert(teacherRequests).values({ email: 'Chloe.Essai@MLFmonde.org', firstName: 'Chloe', lastName: 'Essai' })
+    expect(await teacherGoogleLogin(db, 'chloe.essai@mlfmonde.org')).toEqual({ ok: false, reason: 'en-attente' })
+    expect(await teacherGoogleLogin(db, 'chloe.essai@malraux-rabat.org')).toEqual({ ok: false, reason: 'aucun' })
+  })
+
+  it('demande en attente @malraux-rabat.org : la même identité @mlfmonde.org → aucun', async () => {
+    const db = await testDb()
+    await createTeacherRequest(db, 'chloe.essai@malraux-rabat.org')
+    expect(await teacherGoogleLogin(db, 'chloe.essai@malraux-rabat.org')).toEqual({ ok: false, reason: 'en-attente' })
+    expect(await teacherGoogleLogin(db, 'chloe.essai@mlfmonde.org')).toEqual({ ok: false, reason: 'aucun' })
   })
 
   it('aucune demande ou demande refusée → aucun', async () => {
@@ -178,27 +206,23 @@ describe('teacherGoogleLogin', () => {
     expect(await teacherGoogleLogin(db, 'admin.test@malraux-rabat.org')).toEqual({ ok: false, reason: 'aucun' })
   })
 
-  it("enseignant enregistré en @malraux-rabat.org : son adresse @mlfmonde.org entre (règle d'identité)", async () => {
-    const db = await testDb()
-    const t = await prof(db, 'bob.modele@malraux-rabat.org')
-    expect(await teacherGoogleLogin(db, 'bob.modele@mlfmonde.org')).toMatchObject({ ok: true, teacher: { id: t.id } })
-  })
-
-  it("l'identité vient de l'adresse enregistrée, jamais de l'identifiant (suffixe « 2 »)", async () => {
+  it("la connexion se fait par l'adresse enregistrée, jamais par l'identifiant (suffixe « 2 »)", async () => {
     const db = await testDb()
     const t = await createTeacher(db, {
       email: 'bob.modele@mlfmonde.org', username: 'bob.modele2', firstName: 'Bob', lastName: 'Modele', role: 'prof',
     })
     expect(await teacherGoogleLogin(db, 'bob.modele2@mlfmonde.org')).toEqual({ ok: false, reason: 'aucun' })
     expect(await teacherGoogleLogin(db, 'bob.modele2@malraux-rabat.org')).toEqual({ ok: false, reason: 'aucun' })
-    expect(await teacherGoogleLogin(db, 'bob.modele@malraux-rabat.org')).toMatchObject({ ok: true, teacher: { id: t.id } })
+    expect(await teacherGoogleLogin(db, 'bob.modele@malraux-rabat.org')).toEqual({ ok: false, reason: 'aucun' })
+    expect(await teacherGoogleLogin(db, 'bob.modele@mlfmonde.org')).toMatchObject({ ok: true, teacher: { id: t.id } })
   })
 
-  it("deux comptes dont les adresses ont la même partie avant le @ → aucun (par l'autre domaine)", async () => {
+  it('deux comptes de même prenom.nom sur les deux domaines : chacun n’ouvre que le sien', async () => {
     const db = await testDb()
-    await createTeacher(db, { email: 'bob.modele@malraux-rabat.org', username: 'bob.modele', firstName: 'Bob', lastName: 'Modele', role: 'prof' })
-    await createTeacher(db, { email: 'bob.modele@autre-domaine.org', username: 'bob.modele3', firstName: 'Bob', lastName: 'Modele', role: 'prof' })
-    expect(await teacherGoogleLogin(db, 'bob.modele@mlfmonde.org')).toEqual({ ok: false, reason: 'aucun' })
+    const a = await createTeacher(db, { email: 'bob.modele@malraux-rabat.org', username: 'bob.modele', firstName: 'Bob', lastName: 'Modele', role: 'prof' })
+    const b = await createTeacher(db, { email: 'bob.modele@mlfmonde.org', username: 'bob.modele3', firstName: 'Bob', lastName: 'Modele', role: 'prof' })
+    expect(await teacherGoogleLogin(db, 'bob.modele@malraux-rabat.org')).toMatchObject({ ok: true, teacher: { id: a.id } })
+    expect(await teacherGoogleLogin(db, 'bob.modele@mlfmonde.org')).toMatchObject({ ok: true, teacher: { id: b.id } })
   })
 
   it("une adresse hors des domaines enseignants n'entre jamais par l'identité", async () => {

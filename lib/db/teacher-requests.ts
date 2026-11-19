@@ -10,7 +10,8 @@ export type TeacherRequest = typeof teacherRequests.$inferSelect
 /**
  * Demande de compte enseignant. `duplicate` (rien n'est créé) si un compte ou une demande en attente existe déjà pour la
  * même identité prenom.nom, quel que soit le domaine. L'index unique partiel « teacher_requests_one_pending », porté par
- * l'identité, tranche entre deux envois simultanés.
+ * l'identité, tranche entre deux envois simultanés. Un seul compte par personne ; la connexion n'accepte ensuite que
+ * l'adresse exacte de la demande validée (teacherGoogleLogin).
  */
 export async function createTeacherRequestId(db: DB, email: string): Promise<{ status: 'created'; id: string } | { status: 'duplicate' }> {
   const e = normalizeEmail(email)

@@ -5,6 +5,7 @@ import type { ParcoursItem } from './activities'
 import { listClassAssignments } from './assignments'
 import { normalizeEmail } from '@/lib/auth/validation'
 import type { Level } from '@/lib/levels'
+import { withoutPersonalData } from './safe-message'
 
 export type ClassRow = typeof classes.$inferSelect
 export type ClassSummary = ClassRow & { studentCount: number }
@@ -67,16 +68,20 @@ export async function listClassMembers(db: DB, classId: string): Promise<ClassMe
     }))
 }
 
-/** L'adresse figure-t-elle dans au moins une liste de classe ? Casse ignorée (anciennes lignes saisies telles quelles). */
+/**
+ * L'adresse figure-t-elle dans au moins une liste de classe ? Casse ignorée (anciennes lignes saisies telles quelles).
+ * Appelée à chaque requête de l'élève (requireStudent, getStudentForApi) : une erreur remonte sans l'adresse.
+ */
 export async function isEmailInAnyClass(db: DB, email: string): Promise<boolean> {
-  return (await db.select({ email: classStudents.studentEmail }).from(classStudents)
-    .where(eq(sql`lower(${classStudents.studentEmail})`, normalizeEmail(email))).limit(1)).length === 1
+  return (await withoutPersonalData(() => db.select({ email: classStudents.studentEmail }).from(classStudents)
+    .where(eq(sql`lower(${classStudents.studentEmail})`, normalizeEmail(email))).limit(1))).length === 1
 }
 
+/** Classes de l'élève (pages de l'élève, correction automatique) : une erreur remonte sans l'adresse. */
 export async function studentClasses(db: DB, studentEmail: string): Promise<{ id: string; name: string; level: Level }[]> {
-  return db.select({ id: classes.id, name: classes.name, level: classes.level }).from(classStudents)
+  return withoutPersonalData(() => db.select({ id: classes.id, name: classes.name, level: classes.level }).from(classStudents)
     .innerJoin(classes, eq(classes.id, classStudents.classId))
-    .where(eq(classStudents.studentEmail, normalizeEmail(studentEmail))).orderBy(asc(classes.name))
+    .where(eq(classStudents.studentEmail, normalizeEmail(studentEmail))).orderBy(asc(classes.name)))
 }
 
 /** Un enseignant ne voit que les élèves dont l'e-mail figure dans une de ses classes ; l'admin les voit tous. */

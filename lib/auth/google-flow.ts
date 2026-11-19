@@ -2,7 +2,7 @@ import 'server-only'
 import type { NextRequest, NextResponse } from 'next/server'
 import { PENDING_COOKIE, PENDING_MAX_AGE } from '@/lib/auth/google'
 import type { SessionCookie } from '@/lib/auth/session'
-import { safeMessage } from '@/lib/db/safe-message'
+import { safeErrorDetail } from '@/lib/db/safe-message'
 
 // Outils communs aux routes /auth/* (départ et retour de Google, connexion de développement).
 
@@ -55,9 +55,9 @@ export function logGoogleFailure(detail: string): void {
 
 /**
  * Cause d'une erreur de base (ou autre erreur serveur) pour ce journal : message seul via safeMessage, celui du pilote
- * plutôt que celui de Drizzle (« Failed query… params: » cite les paramètres, donc l'adresse), toute adresse masquée.
+ * plutôt que celui de Drizzle (« Failed query… params: » cite les paramètres, donc l'adresse), toute adresse masquée
+ * (voir safeErrorDetail, partagé avec les Server Actions : lib/http/safe-action.ts).
  */
 export function serverErrorDetail(e: unknown): string {
-  const cause = e instanceof Error && e.cause instanceof Error && /^Failed query:/.test(e.message) ? e.cause : e
-  return safeMessage(cause).replace(/[^\s@'"(),;:<>=]+@[^\s@'"(),;:<>=]+/g, '[adresse]').replace(/\s+/g, ' ').slice(0, 200)
+  return safeErrorDetail(e)
 }

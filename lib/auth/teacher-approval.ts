@@ -19,7 +19,8 @@ export async function approveTeacherRequest(db: DB, requestId: string): Promise<
 
   try {
     const username = teacherIdentity(req.email)
-    // Même identité sur l'un ou l'autre domaine (adresse enregistrée), ou identifiant déjà pris : un seul compte par personne.
+    // Même identité sur l'un ou l'autre domaine (adresse enregistrée), ou identifiant déjà pris : un seul compte par personne
+    // (la connexion, elle, n'accepte que l'adresse exacte du compte).
     if ((await findTeachersByIdentity(db, username, 1)).length || (await findTeacherByUsername(db, username))) {
       await setRequestStatus(db, req.id, 'rejected')
       return DUPLICATE
@@ -29,7 +30,7 @@ export async function approveTeacherRequest(db: DB, requestId: string): Promise<
       to: req.email,
       subject: 'Votre compte est validé — Parcours Scratch',
       text: 'Votre compte enseignant est validé. Connectez-vous avec « Se connecter avec Google », '
-        + 'avec votre adresse @malraux-rabat.org ou @mlfmonde.org.',
+        + `avec l'adresse ${req.email} : seule cette adresse ouvre votre compte.`,
     })
     return { ok: true, username }
   } catch (e) {

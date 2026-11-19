@@ -4,6 +4,7 @@ import { activities, classes, classStudents, progress, reviews, students, teache
 import { getActivityDetail, type ActivityDetail } from '@/lib/db/activities'
 import { teacherCanSeeStudent } from '@/lib/db/classes'
 import type { Progress } from '@/lib/db/progress'
+import { withoutPersonalData } from '@/lib/db/safe-message'
 import type { Level } from '@/lib/levels'
 import { givesActivityTo, grantExtension } from '@/lib/deadlines/extensions'
 import { parseSchoolDateTime } from '@/lib/deadlines/time'
@@ -28,9 +29,9 @@ async function studentInfo(db: DB, studentId: string): Promise<StudentInfo | und
   const [s] = await db.select({ id: students.id, email: students.email, firstName: students.firstName, lastName: students.lastName })
     .from(students).where(eq(students.id, studentId)).limit(1)
   if (!s) return undefined
-  // Niveaux de ses classes (l'élève ne choisit plus son niveau).
-  const levels = (await db.selectDistinct({ level: classes.level }).from(classStudents)
-    .innerJoin(classes, eq(classes.id, classStudents.classId)).where(eq(classStudents.studentEmail, s.email))).map((r) => r.level)
+  // Niveaux de ses classes (l'élève ne choisit plus son niveau). Adresse en paramètre : erreur sans donnée personnelle.
+  const levels = (await withoutPersonalData(() => db.selectDistinct({ level: classes.level }).from(classStudents)
+    .innerJoin(classes, eq(classes.id, classStudents.classId)).where(eq(classStudents.studentEmail, s.email)))).map((r) => r.level)
   return { ...s, levels }
 }
 

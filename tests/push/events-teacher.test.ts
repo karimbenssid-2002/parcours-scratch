@@ -20,7 +20,8 @@ vi.mock('@/lib/db/client', () => ({ getDb: () => holder.db }))
 vi.mock('@/lib/auth/session', () => ({ requireTeacher: async () => ({}) }))
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }))
 vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
-vi.mock('@/lib/email', () => ({ sendEmail: async () => {} }))
+const mails: { to: string; subject: string; text: string }[] = []
+vi.mock('@/lib/email', () => ({ sendEmail: async (m: { to: string; subject: string; text: string }) => { mails.push(m) } }))
 
 import { schedule } from '@/lib/push/schedule'
 import { notifyAutoSubmissions, notifyNewActivities, notifySubmission, notifyTeacherRequest } from '@/lib/push/events'
@@ -257,6 +258,8 @@ describe('notifyTeacherRequest', () => {
     fd.set('email', 'zoe.fictive@malraux-rabat.org')
     await requestTeacherAccess(null, fd)
     await flush()
+    // L'objet de l'e-mail à l'admin peut être écrit dans les journaux (lib/email) : jamais d'adresse dedans.
+    expect(mails.at(-1)?.subject).toBe("Demande d'inscription — Parcours Scratch")
     expect(calls()).toHaveLength(1)
     expect(calls()[0].ids).toEqual([adm.id])
     expect(calls()[0].msg).toEqual({ title: 'Parcours Scratch', body: 'Nouvelle demande de compte enseignant : Zoe Fictive', url: '/admin/demandes' })

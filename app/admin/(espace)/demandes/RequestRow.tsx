@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
-import { bothAddressesWarning } from '@/lib/auth/identity'
+import { exactAddressNotice } from '@/lib/auth/identity'
 import { approveRequestAction, rejectRequestAction } from './actions'
 
 type Row = { id: string; email: string; createdAt: string }
@@ -19,7 +19,7 @@ export function RequestRow({ request }: { request: Row }) {
       <li className="glass p-5">
         <Alert tone="success">
           Compte créé pour {request.email} (identifiant <strong>{result.username}</strong>). Il se connecte avec Google,
-          avec son adresse @malraux-rabat.org ou @mlfmonde.org.
+          avec cette adresse uniquement.
         </Alert>
         <div className="mt-2">
           <Button variant="secondary" className="text-base" onClick={() => router.refresh()}>Fermer</Button>
@@ -34,7 +34,7 @@ export function RequestRow({ request }: { request: Row }) {
         <p className="text-sm text-muted">
           Demande d'inscription · {new Date(request.createdAt).toLocaleString('fr-FR')}
         </p>
-        <p className="mt-1 break-words text-sm text-muted">{bothAddressesWarning(request.email)}</p>
+        <p className="mt-1 break-words text-sm text-muted">{exactAddressNotice(request.email)}</p>
         {result && 'error' in result && <p className="mt-1 text-sm font-semibold text-danger">{result.error}</p>}
       </div>
       <div className="flex gap-2">
