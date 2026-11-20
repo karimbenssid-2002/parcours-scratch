@@ -112,7 +112,6 @@ export function ThemePicker({ classId, classLevel, progressions, stock, assigned
   function itemRow(i: ThemeItem) {
     const already = given.has(i.activityId)
     const rank = picked.indexOf(i.activityId)
-    const foreign = i.levels.length > 0 && !i.levels.includes(level)
     return (
       <li key={i.activityId} className="flex items-center gap-1">
         <label className={`flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-1.5 ${already ? 'text-muted' : 'cursor-pointer hover:bg-surface'}`}>
@@ -126,7 +125,6 @@ export function ThemePicker({ classId, classLevel, progressions, stock, assigned
             <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="font-medium">{i.title}</span>
               <span className="text-sm tracking-wider text-st-almost" aria-label={`Difficulté ${i.difficulty} sur 3`} role="img">{stars(i.difficulty)}</span>
-              {foreign && <span className="rounded-md bg-tile-muted px-1.5 py-px text-[11px] text-muted">défi de {i.levels.map(levelLabel).join(' · ')}</span>}
               {already && <span className="text-[13px] text-muted">Déjà donné</span>}
             </span>
             {i.why && <span className="block text-[13px] leading-snug text-muted">{i.why}</span>}
