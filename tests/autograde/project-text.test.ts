@@ -36,6 +36,52 @@ describe('projet en texte', () => {
     expect(projectFeatures(json(makeSb3([]))).scriptCount).toBe(0)
   })
 
+  describe('blocs non utilisés (jamais exécutés)', () => {
+    const good: Parameters<typeof makeSb3>[0] = [[['event_whenflagclicked'], ['looks_say', { MESSAGE: 'Bonjour' }]]]
+    const withJunk: Parameters<typeof makeSb3>[0] = [
+      ...good,
+      [['motion_movesteps', { STEPS: 10 }], ['looks_say', { MESSAGE: ['operator_random', { FROM: 1, TO: 6 }] }]], // pile sans chapeau
+      [['sensing_askandwait', { QUESTION: 'Ton nom ?' }]], // bloc seul
+      [['event_whenkeypressed', { KEY_OPTION: 'space' }]], // chapeau vide
+    ]
+
+    it('ne les écrit pas dans le texte envoyé à l’IA', () => {
+      const text = projectToText(json(makeSb3(withJunk)))
+      expect(text).toBe(projectToText(json(makeSb3(good))))
+      expect(text).not.toMatch(/avancer|demander|aléatoire|touche/)
+    })
+
+    it('ne les compte ni comme hasard, ni comme entrée, ni comme script', () => {
+      expect(projectFeatures(json(makeSb3(withJunk)))).toEqual({ usesRandom: false, usesInput: false, scriptCount: 1 })
+      expect(projectFeatures(json(makeSb3([[['event_whenflagclicked']], [['motion_movesteps', { STEPS: 10 }]]]))).scriptCount).toBe(0)
+    })
+
+    it('ajoutés au projet de départ, il reste identique au départ', () => {
+      expect(sameProgram(json(makeSb3(withJunk)), json(makeSb3(good)))).toBe(true)
+    })
+
+    it('ignore un bloc personnalisé jamais appelé, garde celui qui est appelé (même indirectement)', () => {
+      const block = (o: Record<string, unknown>) => ({ next: null, parent: null, inputs: {}, fields: {}, topLevel: false, ...o })
+      const def = (id: string, code: string, body: string) => ({
+        [id]: block({ opcode: 'procedures_definition', next: body, topLevel: true, x: 0, y: 0, inputs: { custom_block: [1, `${id}p`] } }),
+        [`${id}p`]: block({ opcode: 'procedures_prototype', parent: id, shadow: true, mutation: { proccode: code } }),
+      })
+      const call = (id: string, code: string, parent: string) => ({ [id]: block({ opcode: 'procedures_call', parent, mutation: { proccode: code } }) })
+      const p = json(makeSb3([]))
+      p.targets[1].blocks = {
+        f: block({ opcode: 'event_whenflagclicked', next: 'c1', topLevel: true, x: 0, y: 0 }), ...call('c1', 'carré', 'f'),
+        ...def('d1', 'carré', 'c2'), ...call('c2', 'côté', 'd1'),
+        ...def('d2', 'côté', 's1'), s1: block({ opcode: 'motion_movesteps', parent: 'd2', inputs: { STEPS: [1, [4, '50']] } }),
+        ...def('d3', 'inutile', 'r1'), r1: block({ opcode: 'sensing_askandwait', parent: 'd3', inputs: { QUESTION: [1, [10, '?']] } }),
+      } as never
+      const text = projectToText(p)
+      expect(text).toContain('définir carré')
+      expect(text).toContain('définir côté')
+      expect(text).not.toContain('inutile')
+      expect(projectFeatures(p)).toEqual({ usesRandom: false, usesInput: false, scriptCount: 3 })
+    })
+  })
+
   it('reconnaît un programme identique malgré des identifiants différents', () => {
     const s: Parameters<typeof makeSb3>[0] = [[['event_whenflagclicked'], ['looks_say', { MESSAGE: 'A' }]]]
     expect(sameProgram(json(makeSb3(s)), json(makeSb3(s)))).toBe(true)

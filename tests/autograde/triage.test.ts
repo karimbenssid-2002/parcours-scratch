@@ -28,6 +28,15 @@ describe('tri sans IA', () => {
     expect(r).toMatchObject({ kind: 'decided', proposal: { decision: 'validated', source: 'tests' } })
     expect((r as { proposal: { criteria: unknown[] } }).proposal.criteria).toHaveLength(2)
   })
+  it('identique à la solution plus des blocs non utilisés (hasard, question) → validé sans IA', () => {
+    const base = say('Bonjour')
+    const junk = { ...base, targets: base.targets.map((t) => t.isStage ? t : { ...t, blocks: { ...t.blocks,
+      r: { opcode: 'operator_random', next: null, parent: null, inputs: { FROM: [1, [4, '1']], TO: [1, [4, '6']] }, fields: {}, topLevel: true, x: 300, y: 0 },
+      q: { opcode: 'sensing_askandwait', next: null, parent: null, inputs: { QUESTION: [1, [10, '?']] }, fields: {}, topLevel: true, x: 300, y: 200 },
+    } }) } as ProjectJson
+    expect(triage({ student: { project: junk, traces: five(trace()) }, solution, starter: null, criteriaCount: 1 }))
+      .toMatchObject({ kind: 'decided', proposal: { decision: 'validated' } })
+  })
   it('projet sans script, ou identique au départ → non réussi sans IA', () => {
     expect(triage({ student: { project: proj({}), traces: five(trace({ says: [] })) }, solution, starter: null, criteriaCount: 1 }))
       .toMatchObject({ kind: 'decided', proposal: { decision: 'needs_work' } })

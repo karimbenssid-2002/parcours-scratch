@@ -150,7 +150,8 @@ const INPUT = new Set([
   'sensing_askandwait', 'sensing_keypressed', 'event_whenkeypressed', 'sensing_mousex', 'sensing_mousey', 'sensing_mousedown',
   'event_whenthisspriteclicked', 'event_whenstageclicked', 'sensing_loudness', 'sensing_answer',
 ])
-const HATS = /^(event_when|control_start_as_clone$|procedures_definition$)/
+// Chapeaux : seul un script qui commence par l'un d'eux peut s'exécuter (extensions comprises : videoSensing_whenMotionGreaterThan…).
+const HATS = /^[a-zA-Z0-9]+_when|^control_start_as_clone$|^procedures_definition$/
 
 const isBlock = (b: BlockJson | undefined): b is BlockObject => !!b && !Array.isArray(b) && typeof b === 'object'
 
@@ -180,10 +181,7 @@ function inputValue(blocks: Record<string, BlockJson>, input: unknown[] | undefi
 }
 
 function phrase(blocks: Record<string, BlockJson>, b: BlockObject): string {
-  if (b.opcode === 'procedures_definition') {
-    const proto = blocks[(b.inputs.custom_block?.[1] as string) ?? '']
-    return `définir ${isBlock(proto) ? proto.mutation?.proccode ?? '?' : '?'}`
-  }
+  if (b.opcode === 'procedures_definition') return `définir ${definedProc(blocks, b) ?? '?'}`
   if (b.opcode === 'procedures_call') {
     const args = Object.keys(b.inputs).map((k) => inputValue(blocks, b.inputs[k]))
     return `${b.mutation?.proccode ?? 'bloc'}${args.length ? ` (${args.join(', ')})` : ''}`
@@ -221,12 +219,44 @@ const scripts = (t: TargetJson) =>
     .filter((e): e is [string, BlockObject] => isBlock(e[1]) && e[1].topLevel && !e[1].shadow)
     .sort(([, a], [, b]) => (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0))
 
+const definedProc = (blocks: Record<string, BlockJson>, b: BlockObject) => {
+  const proto = blocks[(b.inputs.custom_block?.[1] as string) ?? '']
+  return isBlock(proto) ? proto.mutation?.proccode : undefined
+}
+
+/**
+ * Ce qui peut s'exécuter dans un lutin : les scripts qui commencent par un chapeau suivi d'au moins un bloc, et les blocs
+ * qu'ils contiennent. Comme dans Scratch, les piles sans chapeau, les blocs posés seuls, les chapeaux vides et les blocs
+ * personnalisés jamais appelés sont ignorés : la correction ne doit pas tenir compte de ce qui traîne sur le plan de travail.
+ */
+function executable(t: TargetJson): { scripts: [string, BlockObject][]; blocks: BlockObject[] } {
+  const heads = scripts(t).filter(([, b]) => HATS.test(b.opcode) && b.next)
+  const seen = new Set<string>(), called = new Set<string>(), kept = new Set<string>()
+  const visit = (id: string) => {
+    const b = t.blocks[id]
+    if (seen.has(id) || !isBlock(b)) return
+    seen.add(id)
+    if (b.opcode === 'procedures_call' && b.mutation?.proccode) called.add(b.mutation.proccode)
+    for (const input of Object.values(b.inputs)) for (const ref of input.slice(1)) if (typeof ref === 'string') visit(ref)
+    if (b.next) visit(b.next)
+  }
+  const keep = ([id]: [string, BlockObject]) => { kept.add(id); visit(id) }
+  heads.filter(([, b]) => b.opcode !== 'procedures_definition').forEach(keep)
+  // Un bloc personnalisé compte s'il est appelé depuis un script gardé, même par l'intermédiaire d'un autre bloc personnalisé.
+  const defs = heads.filter(([, b]) => b.opcode === 'procedures_definition')
+  for (let grew = true; grew;) {
+    grew = false
+    for (const d of defs) if (!kept.has(d[0]) && called.has(definedProc(t.blocks, d[1]) ?? '')) { keep(d); grew = true }
+  }
+  return { scripts: heads.filter(([id]) => kept.has(id)), blocks: [...seen].map((id) => t.blocks[id] as BlockObject) }
+}
+
 const title = (t: TargetJson) => (t.isStage ? '# Scène' : `# Lutin : ${t.name}`)
 
 export function projectToText(project: ProjectJson): string {
   const out: string[] = []
   for (const t of project.targets) {
-    scripts(t).forEach(([id], i) => {
+    executable(t).scripts.forEach(([id], i) => {
       out.push(`${title(t)} — script ${i + 1}`)
       stack(t.blocks, id, 0, out)
       out.push('')
@@ -245,11 +275,11 @@ export function projectInventory(project: ProjectJson): string {
 export function projectFeatures(project: ProjectJson): { usesRandom: boolean; usesInput: boolean; scriptCount: number } {
   let usesRandom = false, usesInput = false, scriptCount = 0
   for (const t of project.targets) {
-    for (const b of Object.values(t.blocks)) {
-      if (!isBlock(b)) continue
+    const run = executable(t)
+    scriptCount += run.scripts.length
+    for (const b of run.blocks) {
       if (RANDOM.has(b.opcode)) usesRandom = true
       if (INPUT.has(b.opcode) || b.opcode.startsWith('videoSensing_')) usesInput = true
-      if (b.topLevel && !b.shadow && HATS.test(b.opcode)) scriptCount++
     }
   }
   return { usesRandom, usesInput, scriptCount }
