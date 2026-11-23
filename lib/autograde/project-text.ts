@@ -285,6 +285,35 @@ export function projectFeatures(project: ProjectJson): { usesRandom: boolean; us
   return { usesRandom, usesInput, scriptCount }
 }
 
+/**
+ * Variables et listes lues ou modifiées par un bloc exécuté, sous la forme des clés des traces d'exécution
+ * (« nom » pour la scène, « Lutin.nom » pour un lutin). Une variable créée mais jamais utilisée n'en fait pas partie.
+ */
+export function usedData(project: ProjectJson): Set<string> {
+  const ids = new Set<string>(), keys = new Set<string>()
+  for (const t of project.targets) {
+    for (const b of executable(t).blocks) {
+      for (const f of [b.fields.VARIABLE, b.fields.LIST]) if (typeof f?.[1] === 'string') ids.add(f[1])
+      // Variable ou liste posée directement dans une entrée : [12 | 13, nom, identifiant].
+      for (const input of Object.values(b.inputs)) {
+        for (const v of input.slice(1)) if (Array.isArray(v) && (v[0] === 12 || v[0] === 13) && typeof v[2] === 'string') ids.add(v[2])
+      }
+      if (b.opcode === 'sensing_of') { // « (score) de (Lutin) » : variable d'un autre lutin, désignée par son nom
+        const menu = t.blocks[(b.inputs.OBJECT?.[1] as string) ?? '']
+        const object = isBlock(menu) ? String(menu.fields.OBJECT?.[0] ?? '') : ''
+        const property = String(b.fields.PROPERTY?.[0] ?? '')
+        keys.add(object === '_stage_' ? property : `${object}.${property}`)
+      }
+    }
+  }
+  for (const t of project.targets) {
+    for (const [id, [name]] of [...Object.entries(t.variables ?? {}), ...Object.entries(t.lists ?? {})]) {
+      if (ids.has(id)) keys.add(t.isStage ? name : `${t.name}.${name}`)
+    }
+  }
+  return keys
+}
+
 export function sameProgram(a: ProjectJson, b: ProjectJson): boolean {
   return projectToText(a) === projectToText(b) && projectInventory(a) === projectInventory(b)
 }

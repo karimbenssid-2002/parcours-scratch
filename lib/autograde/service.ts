@@ -11,8 +11,8 @@ import { decide, getReviewView, reviewQueue } from '@/lib/review/service'
 import { namesFromEmail } from '@/lib/auth/validation'
 import { readStored } from '@/lib/storage/files'
 import { parseAiAnswer, prepareRequest, type AiClient, type AiOutcome, type AiUsage } from './ai'
-import { differences, summarizeTraces } from './compare'
-import { projectInventory, projectToText, type ProjectJson } from './project-text'
+import { differences, keepUsedData, summarizeTraces } from './compare'
+import { projectInventory, projectToText, usedData, type ProjectJson } from './project-text'
 import { DEFAULT_ANSWERS, DEFAULT_KEYS } from './runner/defaults'
 import type { RunnerDeps } from './runner/types'
 import type { PersonNames } from './sanitize'
@@ -169,10 +169,13 @@ export async function correctJob(db: DB, deps: Deps, job: Job): Promise<void> {
   ])
   if (!solution.project || solution.traces.some((t) => t.error)) return fail(db, deps, job.id, 'La solution de référence n’a pas pu être exécutée.')
   const starter = starterRun ? (starterRun.project as ProjectJson | null) : null
+  // Seules les variables et listes dont les programmes se servent sont comparées et décrites à l'IA.
+  const studentTraces = student.project ? keepUsedData(student.traces, usedData(student.project as ProjectJson)) : student.traces
+  const solutionTraces = keepUsedData(solution.traces, usedData(solution.project as ProjectJson))
 
   const t = triage({
-    student: { project: student.project as ProjectJson | null, traces: student.traces },
-    solution: { project: solution.project as ProjectJson, traces: solution.traces },
+    student: { project: student.project as ProjectJson | null, traces: studentTraces },
+    solution: { project: solution.project as ProjectJson, traces: solutionTraces },
     starter, criteriaCount: config.criteria.length,
   })
   if (t.kind === 'failed') return fail(db, deps, job.id, t.error)
@@ -186,10 +189,10 @@ export async function correctJob(db: DB, deps: Deps, job: Job): Promise<void> {
     instructions: v.activity.instructions ?? '',
     criteria: config.criteria,
     solutionText: `${projectToText(solutionProject)}\n\n# Costumes et sons\n${projectInventory(solutionProject)}`,
-    solutionSummary: summarizeTraces(solution.traces),
+    solutionSummary: summarizeTraces(solutionTraces),
     studentText: `${projectToText(studentProject)}\n\n# Costumes et sons\n${projectInventory(studentProject)}`,
-    studentSummary: summarizeTraces(student.traces),
-    differences: differences(student.traces, solution.traces),
+    studentSummary: summarizeTraces(studentTraces),
+    differences: differences(studentTraces, solutionTraces),
   }, await personNames(db, v.student.email, v.student.firstName, v.student.lastName))
 
   const client = deps.ai()

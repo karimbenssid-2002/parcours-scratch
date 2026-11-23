@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RunTrace } from '@/lib/autograde/runner/types'
-import { differences, sameTraces, summarizeTraces } from '@/lib/autograde/compare'
+import { differences, keepUsedData, sameTraces, summarizeTraces } from '@/lib/autograde/compare'
 import { triage } from '@/lib/autograde/triage'
 import type { ProjectJson } from '@/lib/autograde/project-text'
 
@@ -14,6 +14,12 @@ describe('comparaison', () => {
   it('ignore les temps, compare le reste', () => {
     expect(sameTraces(five(trace()), five(trace({ says: [{ sprite: 'Chat', text: 'Bonjour', t: 999 }] })))).toBe(true)
     expect(sameTraces(five(trace()), five(trace({ says: [{ sprite: 'Chat', text: 'Salut', t: 10 }] })))).toBe(false)
+  })
+  it('ne garde que les variables et listes utilisées', () => {
+    const t = trace({ variables: { score: 3, truc: 0, 'Chat.n': 1 }, lists: { courses: ['pain'], vide: [] } })
+    expect(keepUsedData([t], new Set(['score', 'Chat.n', 'courses']))[0]).toMatchObject({ variables: { score: 3, 'Chat.n': 1 }, lists: { courses: ['pain'] } })
+    expect(keepUsedData([t], new Set(['score']))[0].variables).toEqual({ score: 3 })
+    expect(sameTraces(keepUsedData(five(t), new Set(['score'])), five(trace({ variables: { score: 3 } })))).toBe(true)
   })
   it('résume et décrit les différences', () => {
     expect(summarizeTraces(five(trace({ timedOut: true, finished: false })))).toMatch(/coupé après la durée/)

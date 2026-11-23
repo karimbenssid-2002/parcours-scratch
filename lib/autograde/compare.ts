@@ -11,6 +11,12 @@ export function normalizeTrace(t: RunTrace): string {
   })
 }
 
+const only = <T>(values: Record<string, T>, used: Set<string>) => Object.fromEntries(Object.entries(values).filter(([k]) => used.has(k)))
+
+/** Traces réduites aux variables et listes utilisées (usedData) : une variable créée mais jamais utilisée n'est pas une différence. */
+export const keepUsedData = (traces: RunTrace[], used: Set<string>): RunTrace[] =>
+  traces.map((t) => ({ ...t, variables: only(t.variables, used), lists: only(t.lists, used) }))
+
 export const sameTraces = (a: RunTrace[], b: RunTrace[]) =>
   a.length === b.length && a.every((t, i) => normalizeTrace(t) === normalizeTrace(b[i]))
 

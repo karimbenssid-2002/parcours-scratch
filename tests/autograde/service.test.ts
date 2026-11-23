@@ -86,6 +86,23 @@ async function setup(opts: { students: ('same' | 'different')[]; ai?: AiClient |
 }
 
 describe('correction d’un défi', () => {
+  it('une variable créée par l’élève mais jamais utilisée n’empêche pas la validation sans IA', async () => {
+    const { db, prof, progressIds, deps, client } = await setup({ students: ['same'] })
+    const [p] = await db.select().from(progress).where(eq(progress.id, progressIds[0])).limit(1)
+    await writeStored(p!.projectPath!, makeSb3([[['event_whenflagclicked'], ['looks_say', { MESSAGE: 'Bonjour' }]]], { variables: ['truc'] }))
+    // Comme le vrai exécuteur : toutes les variables du projet sont relevées, utilisées ou non.
+    const run: Deps['run'] = async (bytes, base, seeds) => {
+      const r = await fakeRun(bytes, base, seeds)
+      const stage = (r.project as { targets: { isStage: boolean; variables: Record<string, [string, number]> }[] }).targets.find((t) => t.isStage)!
+      const variables = Object.fromEntries(Object.values(stage.variables).map(([name, value]) => [name, value]))
+      return { ...r, traces: r.traces.map((t) => ({ ...t, variables })) }
+    }
+    await requestCorrection(db, { ...deps, run }, prof.id, progressIds[0], 'propose')
+    await processQueued(db, { ...deps, run })
+    expect(await latestJob(db, prof.id, progressIds[0])).toMatchObject({ status: 'done', proposal: { decision: 'validated', source: 'tests' } })
+    expect((client as unknown as { requests: unknown[] }).requests).toHaveLength(0)
+  })
+
   it('propose sans IA pour un défi identique à la solution ; rien n’est envoyé', async () => {
     const { db, prof, progressIds, deps, client } = await setup({ students: ['same'] })
     expect(await requestCorrection(db, deps, prof.id, progressIds[0], 'propose')).toMatchObject({ ok: true })

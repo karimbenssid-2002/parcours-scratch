@@ -1,6 +1,6 @@
 import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { projectFeatures, projectInventory, projectToText, sameProgram, type ProjectJson } from '@/lib/autograde/project-text'
+import { projectFeatures, projectInventory, projectToText, sameProgram, usedData, type ProjectJson } from '@/lib/autograde/project-text'
 import { makeSb3 } from './fixtures'
 
 const json = (b: Uint8Array) => JSON.parse(strFromU8(unzipSync(b)['project.json'])) as ProjectJson
@@ -80,6 +80,21 @@ describe('projet en texte', () => {
       expect(text).not.toContain('inutile')
       expect(projectFeatures(p)).toEqual({ usesRandom: false, usesInput: false, scriptCount: 3 })
     })
+  })
+
+  it('repère les variables et listes utilisées par les blocs exécutés, et seulement elles', () => {
+    const p = json(makeSb3([
+      [['event_whenflagclicked'], ['data_setvariableto', { VARIABLE: 'score', VALUE: 3 }], ['data_changevariableby', { VARIABLE: 'n', VARIABLE_REPORTER: 'vies' }]],
+      [['data_setvariableto', { VARIABLE: 'truc', VALUE: 1 }]], // pile sans chapeau : jamais exécutée
+    ], { variables: ['score', 'vies', 'n', 'truc', 'inutile'] }))
+    // « n » devient une variable du lutin (clé « Sprite1.n » dans les traces).
+    const [stage, sprite] = p.targets
+    sprite.variables['var-n'] = stage.variables['var-n']
+    delete stage.variables['var-n']
+    stage.lists = { 'liste-1': ['courses', []], 'liste-2': ['vide', []] }
+    sprite.blocks.l = { opcode: 'data_addtolist', next: null, parent: 'b3', inputs: { ITEM: [1, [10, 'pain']] }, fields: { LIST: ['courses', 'liste-1'] }, topLevel: false }
+    ;(sprite.blocks.b3 as { next: string }).next = 'l'
+    expect([...usedData(p)].sort()).toEqual(['Sprite1.n', 'courses', 'score', 'vies'])
   })
 
   it('reconnaît un programme identique malgré des identifiants différents', () => {
